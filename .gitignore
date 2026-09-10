@@ -1,0 +1,38 @@
+# Python / Virtual Environment
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE & System
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Node / Frontend (for future frontend)
+node_modules/
+.next/
+out/
+
+# Testing & Logs
+.pytest_cache/
+htmlcov/
+.coverage
+*.log
+
+# Alembic
+alembic/versions/*.pyc
