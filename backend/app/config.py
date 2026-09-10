@@ -28,8 +28,15 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production"
     API_V1_PREFIX: str = "/api/v1"
 
+    # --- Security & JWT ---
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+
     # --- Database ---
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/student_helpdesk"
+
+    # --- External APIs ---
+    GEMINI_API_KEY: str = ""
 
 
 # Singleton instance — import this wherever you need config

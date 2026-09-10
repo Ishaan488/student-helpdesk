@@ -5,3 +5,11 @@ asyncpg==0.29.0
 pydantic-settings==2.5.2
 alembic==1.13.3
 python-dotenv==1.0.1
+pyjwt==2.9.0
+bcrypt==4.0.1
+python-multipart==0.0.12
+email-validator==2.1.1
+langchain>=0.2.0,<0.3.0
+langchain-google-genai>=1.0.8,<2.0.0
+langgraph>=0.2.14,<0.3.0
+
