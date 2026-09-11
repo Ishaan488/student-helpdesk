@@ -31,6 +31,10 @@ class StudentRegister(BaseModel):
     cgpa: float
     active_backlogs: int = 0
 
+class AdminRegister(BaseModel):
+    email: EmailStr
+    password: str
+
 
 class CurrentUserResponse(BaseModel):
     id: UUID

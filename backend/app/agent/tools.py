@@ -64,3 +64,11 @@ async def fetch_company_facts(db: AsyncSession, company_name: str) -> Dict[str, 
         "description": company.description,
         "website": company.official_website
     }
+
+
+async def search_knowledge_base(query: str) -> str:
+    """
+    Searches the FAISS vector database for unstructured knowledge regarding policies, rules, or unstructured company data.
+    """
+    from app.services.knowledge_service import knowledge_service
+    return knowledge_service.search_knowledge_base(query=query)

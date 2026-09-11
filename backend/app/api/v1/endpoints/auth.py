@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.auth import (
     CurrentUserResponse,
     StudentRegister,
+    AdminRegister,
     Token,
     UserLogin,
 )
@@ -81,6 +82,20 @@ async def register_student(
     db: AsyncSession = Depends(get_db),
 ):
     user = await AuthService.register_student(db, student_data)
+    return user
+
+@router.post(
+    "/register-admin",
+    response_model=CurrentUserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register admin account",
+    description="Creates a new administrator account. In a real app this should be restricted, but open for this project.",
+)
+async def register_admin(
+    admin_data: AdminRegister,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await AuthService.register_admin(db, admin_data)
     return user
 
 

@@ -11,5 +11,6 @@ from app.models.drive import PlacementDrive
 from app.models.eligibility import EligibilityRule
 from app.models.student import Student
 from app.models.user import User
+from app.models.document import KnowledgeDocument
 
-__all__ = ["User", "Student", "Company", "PlacementDrive", "EligibilityRule"]
+__all__ = ["User", "Student", "Company", "PlacementDrive", "EligibilityRule", "KnowledgeDocument"]

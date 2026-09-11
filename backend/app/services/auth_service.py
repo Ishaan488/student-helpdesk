@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.core.security import get_password_hash, verify_password
 from app.models.student import Student
 from app.models.user import RoleEnum, User
-from app.schemas.auth import StudentRegister
+from app.schemas.auth import StudentRegister, AdminRegister
 
 
 class AuthService:
@@ -72,8 +72,35 @@ class AuthService:
         )
         db.add(new_student)
         await db.commit()
-
         # Reload with profile
+        query = (
+            select(User)
+            .options(selectinload(User.student_profile))
+            .where(User.id == new_user.id)
+        )
+        result = await db.execute(query)
+        return result.scalar_one()
+
+
+    @staticmethod
+    async def register_admin(
+        db: AsyncSession, admin_in: AdminRegister
+    ) -> User:
+        user_check = await db.execute(select(User).where(User.email == admin_in.email))
+        if user_check.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A user with this email address already exists.",
+            )
+
+        new_user = User(
+            email=admin_in.email,
+            hashed_password=get_password_hash(admin_in.password),
+            role=RoleEnum.ADMIN,
+        )
+        db.add(new_user)
+        await db.commit()
+        
         query = (
             select(User)
             .options(selectinload(User.student_profile))

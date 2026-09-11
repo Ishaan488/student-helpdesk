@@ -290,9 +290,9 @@ Build Pydantic request/response schemas and FastAPI REST endpoints for placement
 1. Added **LangChain**, **LangGraph**, and **Google GenAI** dependencies to `requirements.txt`.
 2. Created the **Agentic layer** in `backend/app/agent/`:
    - `state.py`: Defined `AgentState` containing conversation memory, intent, and ground-truth `eligibility_results`.
-   - `router.py`: Implemented a fast LangChain intent classifier (using `gemini-1.5-flash`) that parses intent into `ELIGIBILITY_CHECK`, `UPCOMING_DRIVES`, `COMPANY_FACT`, or `GENERAL_CHAT`.
+   - `router.py`: Implemented a fast LangChain intent classifier (using `gemini-3.1-flash-lite`) that parses intent into `ELIGIBILITY_CHECK`, `UPCOMING_DRIVES`, `COMPANY_FACT`, or `GENERAL_CHAT`.
    - `tools.py`: Created deterministic Python functions that wrap our `PlacementService` to fetch ground-truth database rows (without giving the LLM raw DB access).
-   - `graph.py`: Built a LangGraph `StateGraph` that implements the routing logic. The strong reasoning model (`gemini-1.5-pro`) is only invoked at the very end to generate the final natural language response based on injected data.
+   - `graph.py`: Built a LangGraph `StateGraph` that implements the routing logic. The strong reasoning model (`gemini-3.6-flash`) is only invoked at the very end to generate the final natural language response based on injected data.
 3. Created the `/chat/message` API endpoint in `app/api/v1/endpoints/chat.py` and mounted it. This endpoint retrieves the current authenticated `User` and passes their ID into the LangGraph state, ensuring RBAC boundaries are strictly maintained at the LLM level.
 
 ### Key Architectural Win: Preventing Hallucinations & Injecting Context
@@ -306,8 +306,46 @@ Instead of prompt-engineering a massive context window to act as a "Rules Engine
 - **Secure Authentication Handshake**: Implemented a login flow that stores the JWT in `localStorage` and a custom API utility (`fetchWithAuth`) that automatically injects the `Bearer` token into all subsequent requests, ensuring the frontend strictly adheres to the backend's RBAC boundaries.
 - **Agentic UI**: Built a dedicated Chat interface tailored for streaming/fetching deterministic LLM responses, avoiding flashy designs in favor of a clean, trustworthy aesthetic.
 
+## Entry #9: Phase 3 - Knowledge Retrieval & FAISS Pivot
+**Date**: September 11, 2026
+
+### What I Did
+- Added dependencies for Phase 3: `faiss-cpu`, `pypdf`, and `langchain-community`.
+- Designed the schema for RAG (Retrieval-Augmented Generation) by creating the `KnowledgeDocument` model in SQLAlchemy to track uploaded files.
+- **Architectural Pivot:** We originally planned to use `pgvector` inside PostgreSQL. However, due to the complexity of compiling C++ extensions natively on Windows for local development, we pivoted to using **FAISS (Facebook AI Similarity Search)**. FAISS runs entirely in Python and saves the vectors locally to disk, completely bypassing the database extension issue while maintaining the exact same architectural capability.
+
+### Architectural Deep Dive: Embedding Models
+As we transition from deterministic rules to reading unstructured PDFs, we must convert text into mathematical vectors (embeddings) so the agent can perform semantic similarity search.
+
+#### What are different standard industry embedding models?
+1. **OpenAI (`text-embedding-3-small` / `large`)**: The current industry standard for general-purpose RAG. Highly optimized, extremely cheap, and defaults to 1536 dimensions.
+2. **Google (`models/embedding-001` or `text-embedding-004`)**: Google's native embeddings. Integrates seamlessly if you are already using the Gemini stack. Defaults to 768 dimensions.
+3. **Cohere (`embed-english-v3.0`)**: Known for its state-of-the-art native support for text compression and its reranking capabilities. Great for enterprise search.
+4. **HuggingFace / Open Source (`BGE-m3`, `nomic-embed-text`, `all-MiniLM-L6-v2`)**: Open-source models that you can run locally. They are free but require you to manage your own compute (GPU/CPU) to generate the vectors.
+
+#### What is used when?
+- Use **OpenAI/Cohere** when you want a managed service with the highest accuracy out-of-the-box and don't mind paying per token.
+- Use **Local Open Source** when data privacy is paramount (e.g., healthcare, finance) and data cannot leave your servers.
+- Use **Google Embeddings** when your primary generation model is Gemini, as it keeps your architecture within a single cloud ecosystem (Google Cloud/AI Studio), simplifying billing, API keys, and rate limits.
+
+#### What are we using and why?
+We are using **Google's `models/embedding-001`** (768 dimensions) via the LangChain Google GenAI package. 
+**Why?** Because we already use Gemini (`gemini-3.1-flash-lite` and `gemini-3.6-flash`) for our LLM Router and Generator. Using Google's embedding model means we only need *one single API key* (`GEMINI_API_KEY`) for the entire intelligence stack. It is fast, highly capable, and keeps our external dependencies minimal while we learn how to build a RAG pipeline from scratch.
+
+## Entry #10: Full Frontend Authentication & Admin Dashboard
+**Date**: September 11, 2026
+
+### What I Did
+   - **Backend Refactoring:** Added an `AdminRegister` schema and a `POST /api/v1/auth/register-admin` endpoint to allow the creation of Administrator accounts directly from the frontend.
+- **Frontend Authentication UI:** Built `frontend/src/app/signup/page.tsx`, a robust React component that lets users toggle between registering as a Student (which asks for CGPA, Branch, etc.) or an Administrator. It integrates securely with the FastAPI backend.
+- **Admin Dashboard UI:** Built `frontend/src/app/admin/page.tsx` as a protected route. Only users with the `ADMIN` or `PLACEMENT_OFFICER` roles can access it. It features a file uploader that securely `POST`s PDF documents to the Knowledge Service we built in Phase 3.
+- **Database Wipe:** Provided a script (`truncate_users.py`) to clean the database, removing all existing test users so the system can be seeded natively from the new UI.
+
+### Why?
+While backend scripts and Swagger UI are great for initial testing, a true full-stack intelligence application requires intuitive, role-based interfaces. By building these Next.js pages, we move away from CLI commands and transform the project into a usable web app.
+
 ### What's Next
-**Step 9:** Admin Dashboard (Optional) or finalize documentation and cleanup.
+**Step 11:** Test the end-to-end flow! Register a new Admin, log into the dashboard, upload a placement PDF, and ask the chatbot a question to trigger the FAISS vector search.
 
 ---
 

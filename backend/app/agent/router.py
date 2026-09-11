@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 
 # LangChain uses the fast/cheap model for intent classification
-# We use gemini-1.5-flash-latest for speed and low cost
+# We use gemini-3.1-flash-lite for speed and low cost
 llm_router = ChatGoogleGenerativeAI(
     model="gemini-3.1-flash-lite", 
     temperature=0.0,
@@ -18,7 +18,7 @@ llm_router = ChatGoogleGenerativeAI(
 
 class IntentClassification(BaseModel):
     """Structured output for intent routing."""
-    intent: Literal["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "GENERAL_CHAT"] = Field(
+    intent: Literal["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "GENERAL_CHAT"] = Field(
         description="The primary intent of the user's message."
     )
     extracted_company: str = Field(
@@ -33,7 +33,8 @@ Classify the user's latest query into one of these intents:
 1. ELIGIBILITY_CHECK: The user wants to know if they can apply to a drive, or what drives they are eligible for.
 2. UPCOMING_DRIVES: The user is asking what companies are coming to campus generally.
 3. COMPANY_FACT: The user wants to know details about a specific company (e.g. what does Google do, what is TCS package).
-4. GENERAL_CHAT: Anything else (greetings, unrelated questions).
+4. DOCUMENT_QUERY: The user is asking about policies, rules, interview processes, or specific details that might be in a document.
+5. GENERAL_CHAT: Anything else (greetings, unrelated questions).
 
 If they mention a specific company, extract its name."""),
     ("user", "{messages}")

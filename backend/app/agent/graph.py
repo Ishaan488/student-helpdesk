@@ -8,10 +8,10 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agent.router import classify_intent
 from app.agent.state import AgentState
-from app.agent.tools import fetch_company_facts, fetch_student_eligibility, fetch_upcoming_drives
+from app.agent.tools import fetch_company_facts, fetch_student_eligibility, fetch_upcoming_drives, search_knowledge_base
 from app.config import settings
 
-# Strong reasoning model for generating the final response
+# Strong reasoning model for generating the final response (using gemini-3.6-flash)
 llm_generator = ChatGoogleGenerativeAI(
     model="gemini-3.6-flash",
     temperature=0.7,
@@ -31,6 +31,7 @@ async def execute_tool_node(state: AgentState, config: RunnableConfig) -> Dict[s
     intent = state.get("intent")
     company = state.get("extracted_company")
     student_id = state.get("current_user_id")
+    messages = state.get("messages", [])
     
     # Retrieve the db session injected at runtime!
     db = config["configurable"]["db"]
@@ -51,6 +52,11 @@ async def execute_tool_node(state: AgentState, config: RunnableConfig) -> Dict[s
     elif intent == "COMPANY_FACT" and company:
         fact = await fetch_company_facts(db, company)
         results = [fact]
+        
+    elif intent == "DOCUMENT_QUERY":
+        query = messages[-1].content
+        docs = await search_knowledge_base(query)
+        results = [{"knowledge_base_extracts": docs}]
         
     return {"eligibility_results": results}
 
@@ -83,7 +89,7 @@ IMPORTANT RULES:
 def should_execute_tool(state: AgentState) -> str:
     """Conditional edge logic."""
     intent = state.get("intent")
-    if intent in ["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT"]:
+    if intent in ["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY"]:
         return "execute_tool"
     return "generate_response"
 
