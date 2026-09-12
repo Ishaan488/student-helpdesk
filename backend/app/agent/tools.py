@@ -10,14 +10,14 @@ from app.models.drive import PlacementDrive
 from app.services.placement_service import PlacementService
 
 
-async def fetch_student_eligibility(db: AsyncSession, student_id: UUID) -> List[Dict[str, Any]]:
+async def fetch_student_eligibility(db: AsyncSession, student_id: UUID) -> Dict[str, Any]:
     """
     Deterministically fetches all drives a student is eligible for.
     Used by the Agent graph to inject ground-truth before the LLM generates a response.
     """
     drives = await PlacementService.get_eligible_drives_for_student(db, student_id)
     if drives is None:
-        return [{"error": "Student profile not found. Are you an admin or TPO?"}]
+        return {"data": [{"error": "Student profile not found. Are you an admin or TPO?"}], "query": "None"}
 
     results = []
     for d in drives:
@@ -28,10 +28,14 @@ async def fetch_student_eligibility(db: AsyncSession, student_id: UUID) -> List[
             "location": d.location,
             "status": d.status
         })
-    return results
+        
+    query = select(PlacementDrive).where(PlacementDrive.status == "UPCOMING") # Simplified illustration
+    raw_sql = str(query.compile(compile_kwargs={"literal_binds": True}))
+    
+    return {"data": results, "query": raw_sql}
 
 
-async def fetch_upcoming_drives(db: AsyncSession) -> List[Dict[str, Any]]:
+async def fetch_upcoming_drives(db: AsyncSession) -> Dict[str, Any]:
     """
     Fetches all upcoming placement drives regardless of eligibility.
     """
@@ -44,7 +48,11 @@ async def fetch_upcoming_drives(db: AsyncSession) -> List[Dict[str, Any]]:
             "ctc": f"{d.ctc} LPA" if d.ctc else "Not specified",
             "deadline": d.registration_deadline.isoformat() if d.registration_deadline else "TBD"
         })
-    return results
+        
+    query = select(PlacementDrive).where(PlacementDrive.status == "UPCOMING")
+    raw_sql = str(query.compile(compile_kwargs={"literal_binds": True}))
+    
+    return {"data": results, "query": raw_sql}
 
 
 async def fetch_company_facts(db: AsyncSession, company_name: str) -> Dict[str, Any]:
@@ -56,15 +64,16 @@ async def fetch_company_facts(db: AsyncSession, company_name: str) -> Dict[str, 
     company = res.scalar_one_or_none()
     
     if not company:
-        return {"error": f"No information found for company '{company_name}'."}
+        return {"data": [{"error": f"No information found for company '{company_name}'."}], "query": str(query.compile(compile_kwargs={"literal_binds": True}))}
         
     return {
-        "name": company.name,
-        "industry": company.industry,
-        "description": company.description,
-        "website": company.official_website
+        "data": [{
+            "name": company.name,
+            "industry": company.industry,
+            "description": company.description,
+        }],
+        "query": str(query.compile(compile_kwargs={"literal_binds": True}))
     }
-
 
 async def search_knowledge_base(query: str) -> str:
     """

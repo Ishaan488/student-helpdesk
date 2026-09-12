@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends
-from langchain_core.messages import HumanMessage
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.agent.graph import agent_app
-from app.core.dependencies import get_current_user, get_db
+from pydantic import BaseModel
+from langchain_core.messages import HumanMessage
+from app.core.dependencies import get_db, get_current_user
 from app.models.user import User
+from app.agent.graph import agent_app
 
 router = APIRouter()
 
@@ -15,6 +14,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     intent: str | None = None
+    trace: list[str] = []
+    debug_log: dict | None = None
+    memory_state: dict | None = None
 
 @router.post("/message", response_model=ChatResponse)
 async def chat_with_agent(
@@ -33,7 +35,9 @@ async def chat_with_agent(
         "current_user_id": current_user.id,
         "intent": None,
         "extracted_company": None,
-        "eligibility_results": None
+        "eligibility_results": None,
+        "trace": [],
+        "debug_log": {}
     }
     
     # Pass the AsyncSession via RunnableConfig to the graph tools
@@ -45,7 +49,14 @@ async def chat_with_agent(
     # Extract the AI's final response
     final_message = final_state["messages"][-1]
     
+    # Serialize state for the frontend (avoid complex Langchain message objects)
+    serializable_state = {k: v for k, v in final_state.items() if k != "messages"}
+    serializable_state["messages"] = [{"role": m.type, "content": m.content} for m in final_state["messages"]]
+    
     return ChatResponse(
         response=final_message.content,
-        intent=final_state.get("intent")
+        intent=final_state.get("intent"),
+        trace=final_state.get("trace", []),
+        debug_log=final_state.get("debug_log", {}),
+        memory_state=serializable_state
     )

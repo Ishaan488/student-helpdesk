@@ -96,16 +96,17 @@ class KnowledgeService:
             allow_dangerous_deserialization=True
         )
         
-        results = vectorstore.similarity_search(query, k=k)
+        results = vectorstore.similarity_search_with_score(query, k=k)
         
         if not results:
             return "No relevant information found in the knowledge base."
             
         formatted_results = []
-        for res in results:
+        for res, score in results:
             source = res.metadata.get('filename', 'Unknown Document')
             page = res.metadata.get('page', 'Unknown Page')
-            formatted_results.append(f"Source: {source} (Page {page})\nContent: {res.page_content}")
+            # L2 distance (lower is closer)
+            formatted_results.append(f"Source: {source} (Page {page}) [FAISS L2 Score: {score:.4f}]\nContent: {res.page_content}")
             
         return "\n\n---\n\n".join(formatted_results)
 

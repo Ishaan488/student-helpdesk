@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Any, Dict
 
 from langchain_core.messages import SystemMessage
@@ -19,46 +20,73 @@ llm_generator = ChatGoogleGenerativeAI(
 )
 
 async def classify_node(state: AgentState) -> Dict[str, Any]:
-    """Classifies the user's intent."""
+    """Uses LLM to classify the intent of the user's message."""
+    start_time = time.time()
     classification = await classify_intent(state["messages"])
+    duration = int((time.time() - start_time) * 1000)
+    
+    trace = state.get("trace", [])
+    trace.append("classify_node")
+    
+    debug_log = state.get("debug_log", {})
+    debug_log["classify_node"] = {
+        "latency_ms": duration,
+        "classified_intent": classification.intent,
+        "extracted_company": classification.extracted_company,
+        "action": "Routing to execute_tool_node" if classification.intent != "UNKNOWN" else "Routing to generate_response_node"
+    }
+
     return {
         "intent": classification.intent,
-        "extracted_company": classification.extracted_company
+        "extracted_company": classification.extracted_company,
+        "trace": trace,
+        "debug_log": debug_log
     }
 
 async def execute_tool_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
-    """Fetches deterministic structured data."""
-    intent = state.get("intent")
+    """Executes the appropriate tool based on intent."""
+    start_time = time.time()
+    intent = state["intent"]
     company = state.get("extracted_company")
-    student_id = state.get("current_user_id")
-    messages = state.get("messages", [])
-    
-    # Retrieve the db session injected at runtime!
+    messages = state["messages"]
+    user_id = state.get("current_user_id")
     db = config["configurable"]["db"]
     
     results = []
-    
-    if intent == "ELIGIBILITY_CHECK":
-        results = await fetch_student_eligibility(db, student_id)
-        # If they asked for a specific company, filter it!
-        if company:
-            results = [r for r in results if company.lower() in r.get("company", "").lower()]
-            if not results:
-                results = [{"info": f"You are not currently eligible for any drives at {company}, or they are not visiting."}]
-    
+    raw_query = None
+
+    if intent == "ELIGIBILITY_CHECK" and user_id:
+        tool_res = await fetch_student_eligibility(db, user_id)
+        results = tool_res.get("data", [])
+        raw_query = tool_res.get("query")
     elif intent == "UPCOMING_DRIVES":
-        results = await fetch_upcoming_drives(db)
-        
-    elif intent == "COMPANY_FACT" and company:
-        fact = await fetch_company_facts(db, company)
-        results = [fact]
-        
+        tool_res = await fetch_upcoming_drives(db)
+        results = tool_res.get("data", [])
+        raw_query = tool_res.get("query")
+    elif intent == "COMPANY_FACTS" and company:
+        tool_res = await fetch_company_facts(db, company)
+        results = tool_res.get("data", [])
+        raw_query = tool_res.get("query")
     elif intent == "DOCUMENT_QUERY":
         query = messages[-1].content
         docs = await search_knowledge_base(query)
         results = [{"knowledge_base_extracts": docs}]
+        raw_query = f"FAISS Vector Search\nQuery: {query}\nMetric: L2 Cosine Distance"
         
-    return {"eligibility_results": results}
+    duration = int((time.time() - start_time) * 1000)
+    
+    trace = state.get("trace", [])
+    trace.append("execute_tool_node")
+    
+    debug_log = state.get("debug_log", {})
+    debug_log["execute_tool_node"] = {
+        "latency_ms": duration,
+        "action": f"Executed tool for intent: {intent}",
+        "raw_query": raw_query,
+        "raw_payload": results
+    }
+        
+    return {"eligibility_results": results, "trace": trace, "debug_log": debug_log}
 
 async def generate_response_node(state: AgentState) -> Dict[str, Any]:
     """Generates the final response based on intent and ground-truth data."""
@@ -81,9 +109,29 @@ IMPORTANT RULES:
 """
     
     full_messages = [SystemMessage(content=sys_prompt)] + messages
-    
+    # Execute the LLM
+    start_time = time.time()
     response = await llm_generator.ainvoke(full_messages)
-    return {"messages": [response]}
+    duration = int((time.time() - start_time) * 1000)
+    
+    trace = state.get("trace", [])
+    trace.append("generate_response_node")
+    
+    # Extract token usage safely
+    tokens = response.response_metadata.get("token_usage", {}) if hasattr(response, "response_metadata") else {}
+    prompt_tokens = tokens.get("prompt_token_count", "N/A")
+    completion_tokens = tokens.get("candidates_token_count", "N/A")
+    
+    debug_log = state.get("debug_log", {})
+    debug_log["generate_response_node"] = {
+        "latency_ms": duration,
+        "tokens": {"prompt": prompt_tokens, "completion": completion_tokens},
+        "system_prompt": sys_prompt,
+        "model": "gemini-3.6-flash",
+        "temperature": 0.0
+    }
+    
+    return {"messages": [response], "trace": trace, "debug_log": debug_log}
 
 
 def should_execute_tool(state: AgentState) -> str:
