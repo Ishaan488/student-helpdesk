@@ -3,11 +3,18 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithAuth, getAuthToken, removeAuthToken } from "@/lib/api";
-import { Send, Bot, User, LogOut, Loader2, Sparkles, Activity, GitMerge, Database, BrainCircuit, ArrowDown, ChevronRight, X, Clock, Zap } from "lucide-react";
+import { Send, Bot, User, LogOut, Loader2, Sparkles, Activity, GitMerge, Database, BrainCircuit, ArrowDown, ChevronRight, X, Clock, Zap, MessageSquare, Plus } from "lucide-react";
 
 interface Message {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "human" | "ai";
   content: string;
+}
+
+interface Thread {
+  id: string;
+  title: string;
+  summary: string | null;
+  created_at: string;
 }
 
 const CodeBlock = ({ title, content }: { title?: string, content: any }) => (
@@ -96,6 +103,8 @@ const Arrow = ({ active, visited }: { active: boolean, visited: boolean }) => (
 );
 
 export default function ChatPage() {
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Hello! I am your College Placement Intelligence Assistant. How can I help you today?" }
   ]);
@@ -114,12 +123,52 @@ export default function ChatPage() {
   useEffect(() => {
     if (!getAuthToken()) {
       router.push("/login");
+    } else {
+      loadThreads();
     }
   }, [router]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const loadThreads = async () => {
+    try {
+      const data = await fetchWithAuth("/chat/threads");
+      setThreads(data);
+    } catch (e) {
+      console.error("Failed to load threads", e);
+    }
+  };
+
+  const handleNewChat = () => {
+    setCurrentThreadId(null);
+    setMessages([{ role: "assistant", content: "Hello! I am your College Placement Intelligence Assistant. How can I help you today?" }]);
+    setVisitedNodes(new Set());
+    setDebugData({});
+    setMemoryState(null);
+  };
+
+  const loadThreadMessages = async (threadId: string) => {
+    try {
+      setCurrentThreadId(threadId);
+      setVisitedNodes(new Set());
+      setDebugData({});
+      setMemoryState(null);
+      
+      const msgs = await fetchWithAuth(`/chat/threads/${threadId}/messages`);
+      if (msgs && msgs.length > 0) {
+        setMessages(msgs.map((m: any) => ({
+          role: m.role === "human" ? "user" : "assistant",
+          content: m.content
+        })));
+      } else {
+        setMessages([{ role: "assistant", content: "Hello! How can I help you today?" }]);
+      }
+    } catch (e) {
+      console.error("Failed to load messages", e);
+    }
+  };
 
   const handleLogout = () => {
     removeAuthToken();
@@ -141,10 +190,20 @@ export default function ChatPage() {
     setMemoryState(null);
 
     try {
+      const payload: any = { message: userMsg };
+      if (currentThreadId) {
+        payload.thread_id = currentThreadId;
+      }
+      
       const response = await fetchWithAuth("/chat/message", {
         method: "POST",
-        body: JSON.stringify({ message: userMsg })
+        body: JSON.stringify(payload)
       });
+
+      if (!currentThreadId && response.thread_id) {
+        setCurrentThreadId(response.thread_id);
+        loadThreads(); // Refresh thread list to show the new one
+      }
 
       setDebugData(response.debug_log || {});
       setMemoryState(response.memory_state || null);
@@ -162,7 +221,7 @@ export default function ChatPage() {
       setMessages(prev => [...prev, { role: "assistant", content: response.response }]);
     } catch (error: any) {
       setActiveNode(null);
-      setMessages(prev => [...prev, { role: "assistant", content: `Error: ${error.message || "Failed to process request."}` }]);
+      setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${error.message || "Failed to process request."}` }]);
     } finally {
       setIsLoading(false);
     }
@@ -171,7 +230,7 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
       
-      {/* Sidebar */}
+      {/* Sidebar - Enhanced with Threads */}
       <div className="hidden md:flex w-64 flex-col bg-white border-r border-slate-200">
         <div className="p-4 border-b border-slate-200 flex items-center gap-2">
           <div className="w-8 h-8 rounded-md bg-indigo-600 flex items-center justify-center text-white shadow-sm">
@@ -179,15 +238,44 @@ export default function ChatPage() {
           </div>
           <span className="font-semibold tracking-tight">Intelligence Desk</span>
         </div>
-        <div className="flex-1 p-4">
-          <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-3">Capabilities</p>
-          <ul className="space-y-3 text-sm text-slate-600">
-            <li className="flex items-center gap-2"><Database size={14} className="text-slate-400" /> FAISS RAG</li>
-            <li className="flex items-center gap-2"><Activity size={14} className="text-slate-400" /> Eligibility SQL</li>
-            <li className="flex items-center gap-2"><GitMerge size={14} className="text-slate-400" /> LangGraph Routing</li>
-          </ul>
+        
+        <div className="p-4">
+          <button 
+            onClick={handleNewChat}
+            className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-medium transition-colors border border-indigo-200"
+          >
+            <Plus size={16} /> New Chat
+          </button>
         </div>
-        <div className="p-4 border-t border-slate-200">
+        
+        <div className="flex-1 overflow-y-auto px-2">
+          <div className="px-2 pb-2">
+            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-2">Recent Threads</p>
+            {threads.length === 0 ? (
+              <p className="text-xs text-slate-500 py-2">No past conversations.</p>
+            ) : (
+              <ul className="space-y-1">
+                {threads.map(thread => (
+                  <li key={thread.id}>
+                    <button
+                      onClick={() => loadThreadMessages(thread.id)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm truncate transition-colors flex items-center gap-2 ${
+                        currentThreadId === thread.id 
+                          ? "bg-indigo-50 text-indigo-700 font-medium" 
+                          : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      <MessageSquare size={14} className={currentThreadId === thread.id ? "text-indigo-500" : "text-slate-400"} />
+                      <span className="truncate">{thread.title}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        
+        <div className="p-4 border-t border-slate-200 bg-slate-50">
           <button 
             onClick={handleLogout}
             className="flex items-center text-sm text-slate-600 hover:text-slate-900 transition-colors w-full"
@@ -212,12 +300,12 @@ export default function ChatPage() {
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {messages.map((msg, idx) => (
-            <div key={idx} className={`flex gap-4 max-w-3xl mx-auto ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-slate-200 text-slate-700" : "bg-indigo-600 text-white shadow-sm"}`}>
-                {msg.role === "user" ? <User size={16} /> : <Bot size={16} />}
+            <div key={idx} className={`flex gap-4 max-w-3xl mx-auto ${msg.role === "user" || msg.role === "human" ? "flex-row-reverse" : ""}`}>
+              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === "user" || msg.role === "human" ? "bg-slate-200 text-slate-700" : "bg-indigo-600 text-white shadow-sm"}`}>
+                {msg.role === "user" || msg.role === "human" ? <User size={16} /> : <Bot size={16} />}
               </div>
               <div className={`flex-1 rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
-                msg.role === "user" 
+                msg.role === "user" || msg.role === "human"
                   ? "bg-white border border-slate-200 text-slate-900 ml-12 shadow-sm" 
                   : "bg-white border border-slate-200 text-slate-800 shadow-sm mr-12 whitespace-pre-wrap"
               }`}>
@@ -240,7 +328,7 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="p-4 bg-white border-t border-slate-200">
+        <div className="p-4 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)] relative z-10">
           <form onSubmit={handleSend} className="max-w-3xl mx-auto relative">
             <input
               type="text"
@@ -258,6 +346,11 @@ export default function ChatPage() {
               {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
           </form>
+          {currentThreadId && (
+            <div className="max-w-3xl mx-auto mt-2 text-center">
+               <span className="text-[10px] text-slate-400 font-mono">Thread ID: {currentThreadId}</span>
+            </div>
+          )}
         </div>
 
         {/* State Modal */}
@@ -302,7 +395,7 @@ export default function ChatPage() {
               visited={visitedNodes.has('input')}
               icon={User} 
               label="1. User Input Received" 
-              description="Graph execution started"
+              description={currentThreadId ? "Graph execution started (Thread Memory Injected)" : "Graph execution started"}
             />
            
            <Arrow 

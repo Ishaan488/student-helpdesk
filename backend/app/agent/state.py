@@ -11,3 +11,4 @@ class AgentState(TypedDict):
     eligibility_results: List[Dict[str, Any]] | None
     trace: List[str]
     debug_log: Dict[str, Any]
+    summary: str | None

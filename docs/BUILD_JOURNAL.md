@@ -401,5 +401,27 @@ The best way to learn how an Agentic RAG system works is to see exactly what it'
 
 ---
 
-*← This document will grow with every build step. Next entry will be added when we start coding.*
+## Entry #14 — Persistent Conversation Memory (Hybrid Summarization)
+**Date**: September 12, 2026
 
+### What I Did
+Upgraded the Chat AI from a "memory-less" bot to an assistant with persistent memory, capable of answering contextual follow-up questions ("What is the CTC for *that* company?").
+
+1. **Database Schema**: Created `Thread` and `ChatMessage` models in PostgreSQL.
+2. **Hybrid Memory Architecture (Sliding Window + Running Summary)**:
+   - Instead of passing the entire chat history to the LLM (which bloats context windows and skyrockets token costs), we implemented an O(1) summarization strategy.
+   - We query the last 6 messages (3 interactions). 
+   - Any older messages that "fall off" this sliding window are passed to a lightweight background model (`gemini-3.1-flash-lite`), which condenses them and updates the `Thread.summary`.
+   - The generator model (`gemini-3.6-flash`) only ever receives a single `SystemMessage` containing the `summary`, followed by the 6 most recent exact messages.
+3. **API Updates**: Updated `POST /api/v1/chat/message` to accept an optional `thread_id`. Created `GET /api/v1/chat/threads` to fetch history.
+4. **UI Updates**: Built a Sidebar in Next.js `chat/page.tsx` that fetches past threads, allowing the user to seamlessly switch between conversations.
+
+### Architectural Decisions & Takeaways
+- **Why Custom Tables over LangGraph Checkpointers?** LangGraph has a built-in `AsyncPostgresSaver` that serializes memory into opaque binary JSON blobs. While this is fast to implement, it is a "black box" that makes it extremely frustrating to write a REST API for the frontend sidebar (you'd have to parse the JSON blobs just to get the `role` and `content`). By using explicit `Thread` and `ChatMessage` relational tables, the Next.js frontend can interact with standard REST endpoints, maintaining the platform's transparent, decoupled architecture.
+
+### What's Next
+**Step 15:** Implement **Permission-Aware Retrieval** (Phase 4 Security). Ensuring that when a student asks a query, FAISS only searches PDFs tagged for their role.
+
+---
+
+*← This document will grow with every build step. Next entry will be added when we start coding.*

@@ -6,11 +6,12 @@ Alembic imports Base from app.core.database, but it won't know about
 these tables unless they are imported somewhere before Alembic runs.
 """
 
+from app.models.chat import ChatMessage, Thread
 from app.models.company import Company
+from app.models.document import KnowledgeDocument
 from app.models.drive import PlacementDrive
 from app.models.eligibility import EligibilityRule
 from app.models.student import Student
 from app.models.user import User
-from app.models.document import KnowledgeDocument
 
-__all__ = ["User", "Student", "Company", "PlacementDrive", "EligibilityRule", "KnowledgeDocument"]
+__all__ = ["User", "Student", "Company", "PlacementDrive", "EligibilityRule", "KnowledgeDocument", "Thread", "ChatMessage"]

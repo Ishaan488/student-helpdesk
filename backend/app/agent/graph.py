@@ -15,7 +15,7 @@ from app.config import settings
 # Strong reasoning model for generating the final response (using gemini-3.6-flash)
 llm_generator = ChatGoogleGenerativeAI(
     model="gemini-3.6-flash",
-    temperature=0.7,
+    temperature=0.0,
     google_api_key=settings.GEMINI_API_KEY
 )
 
@@ -63,7 +63,7 @@ async def execute_tool_node(state: AgentState, config: RunnableConfig) -> Dict[s
         tool_res = await fetch_upcoming_drives(db)
         results = tool_res.get("data", [])
         raw_query = tool_res.get("query")
-    elif intent == "COMPANY_FACTS" and company:
+    elif intent == "COMPANY_FACT" and company:
         tool_res = await fetch_company_facts(db, company)
         results = tool_res.get("data", [])
         raw_query = tool_res.get("query")
@@ -101,14 +101,20 @@ CURRENT INTENT: {intent}
 
 GROUND TRUTH DATA:
 {json.dumps(results, indent=2) if results else "No structured data available or required for this query."}
+"""
 
+    summary = state.get("summary")
+    if summary:
+        sys_prompt += f"\nPREVIOUS CONVERSATION SUMMARY:\n{summary}\n"
+
+    sys_prompt += """
 IMPORTANT RULES:
 - If ground truth data is provided, YOU MUST base your answer strictly on it.
 - Do NOT hallucinate eligibility, CTC, or package details.
 - Be concise but helpful.
 """
     
-    full_messages = [SystemMessage(content=sys_prompt)] + messages
+    full_messages = [SystemMessage(content=sys_prompt)] + list(messages)
     # Execute the LLM
     start_time = time.time()
     response = await llm_generator.ainvoke(full_messages)

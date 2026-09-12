@@ -36,7 +36,10 @@ Classify the user's latest query into one of these intents:
 4. DOCUMENT_QUERY: The user is asking about policies, rules, interview processes, or specific details that might be in a document.
 5. GENERAL_CHAT: Anything else (greetings, unrelated questions).
 
-If they mention a specific company, extract its name."""),
+CRITICAL EXTRACTION RULE:
+If the user mentions a specific company, extract its name. 
+IMPORTANT: If the user uses an abbreviation or common nickname (e.g., "TCS", "AWS", "MSFT", "Oyo"), you MUST expand it to the FULL OFFICIAL COMPANY NAME (e.g., "Tata Consultancy Services", "Amazon", "Microsoft", "Oyo Rooms") before extracting it. This is because the database strictly uses official names.
+"""),
     ("user", "{messages}")
 ])
 
