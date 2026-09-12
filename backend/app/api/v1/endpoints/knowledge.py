@@ -39,3 +39,69 @@ async def upload_document(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
+
+from pydantic import BaseModel
+from uuid import UUID
+
+class KnowledgeDocumentResponse(BaseModel):
+    id: UUID
+    filename: str
+    description: str | None
+    uploader_id: UUID
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+@router.get("", response_model=list[KnowledgeDocumentResponse])
+async def list_documents(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all uploaded documents in the knowledge base.
+    Only admins or placement officers can view the list of documents.
+    """
+    if current_user.role not in [RoleEnum.ADMIN, RoleEnum.TPO]:
+        raise HTTPException(status_code=403, detail="Not authorized to view knowledge documents")
+        
+    from sqlalchemy import select
+    from app.models.document import KnowledgeDocument
+    
+    result = await db.execute(select(KnowledgeDocument).order_by(KnowledgeDocument.created_at.desc()))
+    docs = result.scalars().all()
+    
+    return [
+        KnowledgeDocumentResponse(
+            id=d.id,
+            filename=d.filename,
+            description=d.description,
+            uploader_id=d.uploader_id,
+            created_at=d.created_at.isoformat()
+        ) for d in docs
+    ]
+
+@router.delete("/{document_id}")
+async def delete_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Delete a document from the knowledge base (DB and FAISS).
+    """
+    if current_user.role not in [RoleEnum.ADMIN, RoleEnum.TPO]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete knowledge documents")
+        
+    from app.models.document import KnowledgeDocument
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    # Delete from FAISS vector store
+    try:
+        await knowledge_service.delete_document(db, document_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete document from vector store: {str(e)}")
+        
+    return {"message": "Document deleted successfully"}

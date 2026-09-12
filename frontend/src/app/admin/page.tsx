@@ -63,12 +63,47 @@ export default function AdminDashboard() {
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
+      // Refresh documents
+      fetchDocuments();
+      
     } catch (err: any) {
       setMessage({ text: err.message || "Failed to upload document", type: "error" });
     } finally {
       setUploading(false);
     }
   };
+
+  const [documents, setDocuments] = useState<any[]>([]);
+
+  const fetchDocuments = async () => {
+    try {
+      // Use trailing slash to avoid FastAPI 307 redirect / 404 strict match issues
+      const data = await fetchWithAuth("/knowledge/");
+      setDocuments(data);
+    } catch (err) {
+      console.error("Failed to fetch documents", err);
+    }
+  };
+
+  const handleDelete = async (documentId: string) => {
+    if (!confirm("Are you sure you want to delete this document? This will remove it from the knowledge base forever.")) return;
+    
+    try {
+      await fetchWithAuth(`/knowledge/${documentId}`, {
+        method: "DELETE"
+      });
+      setMessage({ text: "Document deleted successfully", type: "success" });
+      fetchDocuments();
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to delete document", type: "error" });
+    }
+  };
+
+  useEffect(() => {
+    if (user && (user.role === "ADMIN" || user.role === "TPO")) {
+      fetchDocuments();
+    }
+  }, [user]);
 
   if (loading) {
     return (
@@ -110,7 +145,7 @@ export default function AdminDashboard() {
       </nav>
 
       <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
+        <div className="md:grid md:grid-cols-3 md:gap-6 mb-12">
           <div className="md:col-span-1">
             <div className="px-4 sm:px-0">
               <h3 className="text-lg font-medium leading-6 text-slate-900">Knowledge Base</h3>
@@ -204,6 +239,50 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+
+        {/* Uploaded Documents List */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg border border-slate-200">
+          <div className="px-4 py-5 sm:px-6 flex justify-between items-center border-b border-slate-200 bg-slate-50">
+            <div>
+              <h3 className="text-lg leading-6 font-medium text-slate-900">Uploaded Documents</h3>
+              <p className="mt-1 max-w-2xl text-sm text-slate-500">All PDFs currently indexed in FAISS.</p>
+            </div>
+            <div className="text-sm text-slate-500">
+              Total: {documents.length}
+            </div>
+          </div>
+          <div className="border-t border-slate-200">
+            {documents.length === 0 ? (
+              <div className="text-center py-10 text-sm text-slate-500">
+                No documents uploaded yet.
+              </div>
+            ) : (
+              <ul role="list" className="divide-y divide-slate-200">
+                {documents.map((doc) => (
+                  <li key={doc.id} className="pl-4 pr-4 py-4 sm:pl-6 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <p className="text-sm font-medium text-blue-600 truncate">{doc.filename}</p>
+                        <p className="text-sm text-slate-500 mt-1">{doc.description}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 text-sm text-slate-500">
+                        <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                          {new Date(doc.created_at).toLocaleString()}
+                        </span>
+                        <button 
+                          onClick={() => handleDelete(doc.id)}
+                          className="text-xs text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </main>

@@ -110,4 +110,33 @@ class KnowledgeService:
             
         return "\n\n---\n\n".join(formatted_results)
 
+    async def delete_document(self, db: AsyncSession, document_id: UUID) -> None:
+        """
+        Deletes a document from the Postgres database and its chunks from the FAISS vector store.
+        """
+        # 1. Delete from Postgres
+        doc_record = await db.get(KnowledgeDocument, document_id)
+        if doc_record:
+            await db.delete(doc_record)
+            await db.commit()
+
+        # 2. Delete from FAISS
+        if os.path.exists(FAISS_INDEX_PATH):
+            vectorstore = FAISS.load_local(
+                FAISS_INDEX_PATH, 
+                self.embeddings, 
+                allow_dangerous_deserialization=True
+            )
+            
+            # Find the internal FAISS IDs of chunks that belong to this document
+            ids_to_delete = []
+            if hasattr(vectorstore, 'docstore') and hasattr(vectorstore.docstore, '_dict'):
+                for chunk_id, document in vectorstore.docstore._dict.items():
+                    if document.metadata.get("document_id") == str(document_id):
+                        ids_to_delete.append(chunk_id)
+                        
+            if ids_to_delete:
+                vectorstore.delete(ids_to_delete)
+                vectorstore.save_local(FAISS_INDEX_PATH)
+
 knowledge_service = KnowledgeService()
