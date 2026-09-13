@@ -446,4 +446,26 @@ Implemented a highly secure, Two-Layer RAG guardrail architecture to prevent stu
 
 ---
 
+## Entry #16 — Advanced Data Modeling (10-Year Historical Placement Analytics)
+**Date**: September 14, 2026
+
+### What I Did
+1. **Designed a 3-Table Relational Schema:** Moved beyond a flat summary table and implemented a true Data Warehouse structure (`historical_drives`, `historical_student_outcomes`, `yearly_batch_summary`).
+2. **Built an Autonomous Synthetic Data Generator (`generate_historical_data.py`):** Wrote a pure Python script using probability distributions to simulate 10 years of placement data across 28 companies and 6 branches.
+3. **Bulk Ingestion (`load_historical_data.py`):** Built an async chunked loader using SQLAlchemy to inject all 7,500+ generated records into PostgreSQL seamlessly.
+
+### Architectural Decisions & Takeaways
+- **Why Relational SQL over FAISS?**
+  Vector databases (FAISS) are excellent at semantic text retrieval but practically useless at math, grouping, and aggregations. To answer questions like *"What was the average CTC for CS in 2023?"*, the data must be rigorously structured in PostgreSQL. This allows the AI agent to use deterministic `Text-to-SQL` tooling rather than hallucinating math over raw text chunks.
+- **Why a 3-Table Schema?**
+  - Table 1 (`historical_drives`) tracks the macro funnel (Total Applied -> Interviewed -> Selected).
+  - Table 2 (`historical_student_outcomes`) tracks the micro outcomes via anonymized IDs (e.g., finding out how many students got >2 offers).
+  - Table 3 (`yearly_batch_summary`) pre-computes heavy aggregations so the AI doesn't have to write overly complex SQL queries for simple batch statistics.
+- **Token Economics:** Generating the mock data entirely via Python mathematics rather than LLM generation saved thousands of output tokens and guaranteed logical consistency (e.g., selected <= interviewed).
+
+### What's Next
+**Step 17:** Integrate a **Data Analyst (Text-to-SQL)** LangGraph Tool to allow the agent to query this massive dataset securely.
+
+---
+
 *← This document will grow with every build step. Next entry will be added when we start coding.*
