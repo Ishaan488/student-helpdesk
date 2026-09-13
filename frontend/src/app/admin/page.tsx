@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/lib/api";
-import { Shield, Upload, FileText, Loader2, LogOut } from "lucide-react";
+import { Shield, Upload, FileText, Loader2, LogOut, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminDashboard() {
@@ -15,6 +15,7 @@ export default function AdminDashboard() {
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     // Check if user is admin
@@ -74,14 +75,23 @@ export default function AdminDashboard() {
   };
 
   const [documents, setDocuments] = useState<any[]>([]);
+  const [studentsList, setStudentsList] = useState<any[]>([]);
 
   const fetchDocuments = async () => {
     try {
-      // Use trailing slash to avoid FastAPI 307 redirect / 404 strict match issues
       const data = await fetchWithAuth("/knowledge/");
       setDocuments(data);
     } catch (err) {
       console.error("Failed to fetch documents", err);
+    }
+  };
+
+  const fetchStudents = async () => {
+    try {
+      const data = await fetchWithAuth("/students/");
+      setStudentsList(data);
+    } catch (err) {
+      console.error("Failed to fetch students", err);
     }
   };
 
@@ -102,6 +112,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (user && (user.role === "ADMIN" || user.role === "TPO")) {
       fetchDocuments();
+      fetchStudents();
     }
   }, [user]);
 
@@ -124,12 +135,6 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-slate-600">{user?.email}</span>
-              <Link
-                href="/chat"
-                className="text-sm font-medium text-blue-600 hover:text-blue-500"
-              >
-                Go to Chat
-              </Link>
               <button
                 onClick={() => {
                   localStorage.removeItem("token");
@@ -285,6 +290,133 @@ export default function AdminDashboard() {
             )}
           </div>
         </div>
+
+        {/* Create Student Section */}
+        <div className="mt-12 md:grid md:grid-cols-3 md:gap-6 mb-12">
+          <div className="md:col-span-1">
+            <div className="px-4 sm:px-0">
+              <h3 className="text-lg font-medium leading-6 text-slate-900">User Management</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Register a new student account. They will use these credentials to access the intelligence platform.
+              </p>
+            </div>
+          </div>
+          
+          <div className="mt-5 md:mt-0 md:col-span-2">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const data = new FormData(form);
+              try {
+                await fetchWithAuth("/auth/register", {
+                  method: "POST",
+                  body: JSON.stringify(Object.fromEntries(data)),
+                });
+                alert("Student registered successfully!");
+                form.reset();
+                fetchStudents();
+              } catch (err: any) {
+                alert("Registration failed: " + err.message);
+              }
+            }}>
+              <div className="shadow sm:rounded-md sm:overflow-hidden">
+                <div className="px-4 py-5 bg-white space-y-6 sm:p-6 border border-slate-200">
+                  <div className="grid grid-cols-6 gap-6">
+                    <div className="col-span-6 sm:col-span-3">
+                      <label className="block text-sm font-medium text-slate-700">Email address</label>
+                      <input type="email" name="email" required className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 py-2 px-3 border" />
+                    </div>
+                    <div className="col-span-6 sm:col-span-3">
+                      <label className="block text-sm font-medium text-slate-700">Password</label>
+                      <div className="relative mt-1">
+                        <input type={showPassword ? "text" : "password"} name="password" required className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 py-2 px-3 pr-10 border" />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label className="block text-sm font-medium text-slate-700">College ID</label>
+                      <input type="text" name="college_id" required className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 py-2 px-3 border" />
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label className="block text-sm font-medium text-slate-700">Branch</label>
+                      <input type="text" name="branch" required className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 py-2 px-3 border" />
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label className="block text-sm font-medium text-slate-700">Batch (Year)</label>
+                      <input type="number" name="batch" required className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 py-2 px-3 border" />
+                    </div>
+                    <div className="col-span-6 sm:col-span-3">
+                      <label className="block text-sm font-medium text-slate-700">CGPA</label>
+                      <input type="number" step="0.01" name="cgpa" required className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 py-2 px-3 border" />
+                    </div>
+                    <div className="col-span-6 sm:col-span-3">
+                      <label className="block text-sm font-medium text-slate-700">Active Backlogs</label>
+                      <input type="number" name="active_backlogs" defaultValue="0" required className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 py-2 px-3 border" />
+                    </div>
+                  </div>
+                </div>
+                <div className="px-4 py-3 bg-slate-50 text-right sm:px-6 border-t border-slate-200">
+                  <button type="submit" className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900">
+                    Register Student
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {/* Registered Students List */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg border border-slate-200 mb-12">
+          <div className="px-4 py-5 sm:px-6 flex justify-between items-center border-b border-slate-200 bg-slate-50">
+            <div>
+              <h3 className="text-lg leading-6 font-medium text-slate-900">Registered Students</h3>
+              <p className="mt-1 max-w-2xl text-sm text-slate-500">All registered student accounts.</p>
+            </div>
+            <div className="text-sm text-slate-500">
+              Total: {studentsList.length}
+            </div>
+          </div>
+          <div className="border-t border-slate-200">
+            {studentsList.length === 0 ? (
+              <div className="text-center py-10 text-sm text-slate-500">
+                No students registered yet.
+              </div>
+            ) : (
+              <ul role="list" className="divide-y divide-slate-200">
+                {studentsList.map((student) => (
+                  <li key={student.id} className="pl-4 pr-4 py-4 sm:pl-6 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <p className="text-sm font-medium text-slate-900">{student.user?.email}</p>
+                        <p className="text-sm text-slate-500 mt-1">
+                          ID: <span className="font-mono text-xs">{student.college_id}</span> • 
+                          Branch: {student.branch} • 
+                          Batch: {student.batch} • 
+                          CGPA: {student.cgpa}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 text-sm text-slate-500">
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${student.user?.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {student.user?.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                          {new Date(student.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
       </main>
     </div>
   );

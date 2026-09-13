@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithAuth, getAuthToken, removeAuthToken } from "@/lib/api";
 import { Send, Bot, User, LogOut, Loader2, Sparkles, Activity, GitMerge, Database, BrainCircuit, ArrowDown, ChevronRight, X, Clock, Zap, MessageSquare, Plus } from "lucide-react";
+import Link from "next/link";
 
 interface Message {
   role: "user" | "assistant" | "human" | "ai";
@@ -117,6 +118,15 @@ export default function ChatPage() {
   const [memoryState, setMemoryState] = useState<any>(null);
   const [showStateModal, setShowStateModal] = useState(false);
   
+  // Profile Modal State
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [profileData, setProfileData] = useState({
+    college_id: "", branch: "", batch: 2026, cgpa: 0.0, active_backlogs: 0
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState({ text: "", type: "" });
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -125,12 +135,42 @@ export default function ChatPage() {
       router.push("/login");
     } else {
       loadThreads();
+      fetchWithAuth("/auth/me").then(data => {
+        setUser(data);
+        if (data.student_profile) {
+          setProfileData({
+            college_id: data.student_profile.college_id || "",
+            branch: data.student_profile.branch || "",
+            batch: data.student_profile.batch || 2026,
+            cgpa: data.student_profile.cgpa || 0.0,
+            active_backlogs: data.student_profile.active_backlogs || 0
+          });
+        }
+      }).catch(() => router.push("/login"));
     }
   }, [router]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileMessage({ text: "", type: "" });
+    try {
+      await fetchWithAuth("/students/me", {
+        method: "PUT",
+        body: JSON.stringify(profileData),
+      });
+      setProfileMessage({ text: "Profile updated successfully!", type: "success" });
+      setTimeout(() => setShowProfileModal(false), 1500);
+    } catch (err: any) {
+      setProfileMessage({ text: err.message || "Failed to update profile", type: "error" });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const loadThreads = async () => {
     try {
@@ -275,7 +315,14 @@ export default function ChatPage() {
           </div>
         </div>
         
-        <div className="p-4 border-t border-slate-200 bg-slate-50">
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-col gap-3">
+          <button 
+            onClick={() => setShowProfileModal(true)}
+            className="flex items-center text-sm text-slate-600 hover:text-slate-900 transition-colors w-full"
+          >
+            <User size={16} className="mr-2" />
+            My Profile
+          </button>
           <button 
             onClick={handleLogout}
             className="flex items-center text-sm text-slate-600 hover:text-slate-900 transition-colors w-full"
@@ -368,6 +415,60 @@ export default function ChatPage() {
               </div>
               <div className="p-4 overflow-y-auto font-mono text-xs text-emerald-300">
                 <pre>{JSON.stringify(memoryState, null, 2)}</pre>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Profile Modal */}
+        {showProfileModal && (
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl flex flex-col">
+              <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-slate-900">My Profile</h3>
+                <button onClick={() => setShowProfileModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-5 overflow-y-auto max-h-[80vh]">
+                <form onSubmit={handleSaveProfile} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">College ID</label>
+                    <input type="text" value={profileData.college_id} disabled className="mt-1 block w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-md text-slate-500 sm:text-sm" />
+                    <p className="mt-1 text-xs text-slate-500">Contact admin to change College ID.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Branch</label>
+                    <input type="text" required value={profileData.branch} onChange={(e) => setProfileData({...profileData, branch: e.target.value})} className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Batch (Graduation Year)</label>
+                    <input type="number" required value={profileData.batch} onChange={(e) => setProfileData({...profileData, batch: parseInt(e.target.value)})} className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">CGPA</label>
+                    <input type="number" step="0.01" required value={profileData.cgpa} onChange={(e) => setProfileData({...profileData, cgpa: parseFloat(e.target.value)})} className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">Active Backlogs</label>
+                    <input type="number" required value={profileData.active_backlogs} onChange={(e) => setProfileData({...profileData, active_backlogs: parseInt(e.target.value)})} className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900" />
+                  </div>
+                  
+                  {profileMessage.text && (
+                    <div className={`p-2 rounded text-sm ${profileMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                      {profileMessage.text}
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-200 mt-4 flex justify-end">
+                    <button type="button" onClick={() => setShowProfileModal(false)} className="mr-3 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 focus:outline-none">
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={savingProfile} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none disabled:opacity-50">
+                      {savingProfile ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

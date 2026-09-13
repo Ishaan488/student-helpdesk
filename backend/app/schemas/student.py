@@ -26,6 +26,12 @@ class StudentBase(BaseModel):
 class StudentCreate(StudentBase):
     user_id: UUID
 
+class StudentUpdate(BaseModel):
+    branch: Optional[str] = None
+    batch: Optional[int] = None
+    cgpa: Optional[float] = None
+    active_backlogs: Optional[int] = None
+
 
 class StudentResponse(StudentBase):
     id: UUID

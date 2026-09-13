@@ -75,12 +75,17 @@ async def login_json(
     response_model=CurrentUserResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register student account",
-    description="Creates a new student account and associated academic profile.",
+    description="Creates a new student account and associated academic profile. (Admin Only)",
 )
 async def register_student(
     student_data: StudentRegister,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    from app.models.user import RoleEnum
+    if current_user.role not in [RoleEnum.ADMIN, RoleEnum.TPO]:
+        raise HTTPException(status_code=403, detail="Not authorized to register users")
+        
     user = await AuthService.register_student(db, student_data)
     return user
 
@@ -89,12 +94,17 @@ async def register_student(
     response_model=CurrentUserResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register admin account",
-    description="Creates a new administrator account. In a real app this should be restricted, but open for this project.",
+    description="Creates a new administrator account. (Admin Only)",
 )
 async def register_admin(
     admin_data: AdminRegister,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    from app.models.user import RoleEnum
+    if current_user.role != RoleEnum.ADMIN:
+        raise HTTPException(status_code=403, detail="Only Admins can register new Admins")
+        
     user = await AuthService.register_admin(db, admin_data)
     return user
 

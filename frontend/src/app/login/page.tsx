@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL, setAuthToken } from "@/lib/api";
-import { Lock, Mail, Loader2, ArrowRight } from "lucide-react";
+import { Lock, Mail, Loader2, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("aryan.sharma@college.edu");
-  const [password, setPassword] = useState("aryan123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -34,7 +35,23 @@ export default function LoginPage() {
 
       const data = await response.json();
       setAuthToken(data.access_token);
-      router.push("/chat");
+      
+      // Fetch user profile to route dynamically
+      const userRes = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: { "Authorization": `Bearer ${data.access_token}` }
+      });
+      
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        if (userData.role === "ADMIN" || userData.role === "TPO") {
+          router.push("/admin");
+        } else {
+          router.push("/chat");
+        }
+      } else {
+        router.push("/chat"); // Fallback
+      }
+      
     } catch (err: any) {
       setError(err.message || "Something went wrong.");
     } finally {
@@ -71,7 +88,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-slate-900 focus:border-slate-900 sm:text-sm outline-none transition-all"
+                className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-slate-900 focus:border-slate-900 sm:text-sm outline-none transition-all text-slate-900"
                 placeholder="name@college.edu"
               />
             </div>
@@ -84,13 +101,20 @@ export default function LoginPage() {
                 <Lock size={18} />
               </div>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-slate-900 focus:border-slate-900 sm:text-sm outline-none transition-all"
+                className="block w-full pl-10 pr-10 py-2.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-slate-900 focus:border-slate-900 sm:text-sm outline-none transition-all text-slate-900"
                 placeholder="••••••••"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
           </div>
 
