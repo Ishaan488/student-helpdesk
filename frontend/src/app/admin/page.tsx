@@ -13,6 +13,7 @@ export default function AdminDashboard() {
   
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
+  const [accessLevel, setAccessLevel] = useState("ALL");
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -49,6 +50,7 @@ export default function AdminDashboard() {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("description", description);
+    formData.append("access_level", accessLevel);
 
     try {
       const res = await fetchWithAuth("/knowledge/upload", {
@@ -59,6 +61,7 @@ export default function AdminDashboard() {
       setMessage({ text: "Document uploaded and indexed successfully!", type: "success" });
       setFile(null);
       setDescription("");
+      setAccessLevel("ALL");
       
       // Reset file input
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
@@ -178,6 +181,24 @@ export default function AdminDashboard() {
                         onChange={(e) => setDescription(e.target.value)}
                         required
                       />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Access Level
+                    </label>
+                    <div className="mt-1">
+                      <select
+                        className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 px-3 py-2 border bg-white"
+                        value={accessLevel}
+                        onChange={(e) => setAccessLevel(e.target.value)}
+                      >
+                        <option value="ALL">ALL (Students, TPO, Admins)</option>
+                        <option value="STUDENT">STUDENT Only</option>
+                        <option value="TPO">TPO Only</option>
+                        <option value="ADMIN">ADMIN Only</option>
+                      </select>
                     </div>
                   </div>
 

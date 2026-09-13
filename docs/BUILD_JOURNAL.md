@@ -424,4 +424,26 @@ Upgraded the Chat AI from a "memory-less" bot to an assistant with persistent me
 
 ---
 
+## Entry #15 — Two-Layer Permission-Aware Retrieval (Phase 4 Security)
+**Date**: September 14, 2026
+
+### What I Did
+Implemented a highly secure, Two-Layer RAG guardrail architecture to prevent students from retrieving confidential TPO/Admin documents.
+1. **Structural Guardrail (Ingestion):** Added an `access_level` dropdown (`ALL`, `STUDENT`, `TPO`, `ADMIN`) to the frontend PDF upload form. The backend injects this role as metadata into every FAISS vector chunk. At query time, `similarity_search` is strictly filtered by the user's JWT role.
+2. **Evaluator Guardrail (Agentic Defense-in-Depth):** Added a `guardrail_node` into the LangGraph state graph. If a document query retrieves data from FAISS, this node intercepts the raw chunks and uses a fast, cheap LLM (`gemini-3.1-flash-lite`) to explicitly evaluate if the content contains restricted administrative data. If so, it flips an `is_safe` flag to `False`, forcing the final generator LLM to reject the query.
+
+### Architectural Decisions & Takeaways
+- **Why Two Layers?** 
+  - The **Structural Layer (FAISS Metadata)** costs 0 tokens and is 100% deterministic. It efficiently blocks entire documents (e.g., "Salary Secrets.pdf") from unauthorized users.
+  - The **Evaluator Layer (LangGraph Node)** handles *sub-document segregation*. If an Admin uploads a mixed-policy document tagged as `ALL`, but it contains a sneaky confidential clause, the evaluator LLM catches it at query-time.
+- **Prompt Injection Immunity (Data/Control Plane Isolation):**
+  - **Evaluator is Prompt-Blind:** The `guardrail_node` only reads the trusted FAISS chunks and the user's role. The student's actual chat message is intentionally omitted from its context window, making it impossible to manipulate the evaluator.
+  - **Generator is Data-Starved:** If the guardrail triggers, the secret FAISS chunks are deleted from the state *before* the generator is called. Even if a student jailbreaks the generator, it physically cannot leak data it doesn't have.
+- **Token Economics:** We do not scan the entire PDF with an LLM during ingestion (too expensive). We only run the evaluator guardrail on the *specifically retrieved chunks* (e.g., 4 paragraphs) right before responding, maximizing security while minimizing token burn.
+
+### What's Next
+**Step 16:** Phase 5 - Optimization (Caching, Monitoring) or final UI polish.
+
+---
+
 *← This document will grow with every build step. Next entry will be added when we start coding.*

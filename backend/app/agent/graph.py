@@ -69,9 +69,10 @@ async def execute_tool_node(state: AgentState, config: RunnableConfig) -> Dict[s
         raw_query = tool_res.get("query")
     elif intent == "DOCUMENT_QUERY":
         query = messages[-1].content
-        docs = await search_knowledge_base(query)
+        user_role = state.get("current_user_role", "ALL")
+        docs = await search_knowledge_base(query, user_role)
         results = [{"knowledge_base_extracts": docs}]
-        raw_query = f"FAISS Vector Search\nQuery: {query}\nMetric: L2 Cosine Distance"
+        raw_query = f"FAISS Vector Search\nQuery: {query}\nRole Filter: {user_role}\nMetric: L2 Cosine Distance"
         
     duration = int((time.time() - start_time) * 1000)
     
@@ -88,13 +89,63 @@ async def execute_tool_node(state: AgentState, config: RunnableConfig) -> Dict[s
         
     return {"eligibility_results": results, "trace": trace, "debug_log": debug_log}
 
+async def guardrail_node(state: AgentState) -> Dict[str, Any]:
+    """Evaluates the retrieved FAISS chunks to ensure no sensitive data leaks."""
+    start_time = time.time()
+    intent = state.get("intent")
+    user_role = state.get("current_user_role", "ALL")
+    results = state.get("eligibility_results", [])
+    
+    # We only guardrail DOCUMENT_QUERY (FAISS retrieval)
+    if intent != "DOCUMENT_QUERY" or not results:
+        return {"is_safe": True}
+        
+    extracted_text = json.dumps(results)
+    
+    # Fast, cheap evaluator prompt
+    eval_llm = ChatGoogleGenerativeAI(
+        model="gemini-3.1-flash-lite",
+        temperature=0.0,
+        google_api_key=settings.GEMINI_API_KEY
+    )
+    
+    prompt = f"""You are a strict security evaluator.
+A user with role [{user_role}] is about to see the following retrieved database chunks.
+
+CHUNKS:
+{extracted_text}
+
+Task: Does this text contain strictly confidential administrative, faculty, or TPO-only data that a {user_role} should NOT see? 
+Answer with a single word: YES or NO."""
+
+    eval_res = await eval_llm.ainvoke(prompt)
+    is_safe = "YES" not in eval_res.content.upper()
+    
+    duration = int((time.time() - start_time) * 1000)
+    trace = state.get("trace", [])
+    trace.append("guardrail_node")
+    
+    debug_log = state.get("debug_log", {})
+    debug_log["guardrail_node"] = {
+        "latency_ms": duration,
+        "is_safe": is_safe,
+        "eval_response": eval_res.content
+    }
+    
+    return {"is_safe": is_safe, "trace": trace, "debug_log": debug_log}
+
 async def generate_response_node(state: AgentState) -> Dict[str, Any]:
     """Generates the final response based on intent and ground-truth data."""
     intent = state.get("intent")
     results = state.get("eligibility_results", [])
     messages = state["messages"]
     
-    sys_prompt = f"""You are the College Placement Intelligence Platform assistant.
+    is_safe = state.get("is_safe", True)
+    
+    if not is_safe:
+        sys_prompt = "The user queried confidential information that they are not authorized to see. Politely refuse to answer the question citing security policies."
+    else:
+        sys_prompt = f"""You are the College Placement Intelligence Platform assistant.
 Your goal is to answer the user's question clearly and politely.
 
 CURRENT INTENT: {intent}
@@ -103,11 +154,11 @@ GROUND TRUTH DATA:
 {json.dumps(results, indent=2) if results else "No structured data available or required for this query."}
 """
 
-    summary = state.get("summary")
-    if summary:
-        sys_prompt += f"\nPREVIOUS CONVERSATION SUMMARY:\n{summary}\n"
+        summary = state.get("summary")
+        if summary:
+            sys_prompt += f"\nPREVIOUS CONVERSATION SUMMARY:\n{summary}\n"
 
-    sys_prompt += """
+        sys_prompt += """
 IMPORTANT RULES:
 - If ground truth data is provided, YOU MUST base your answer strictly on it.
 - Do NOT hallucinate eligibility, CTC, or package details.
@@ -153,6 +204,7 @@ builder = StateGraph(AgentState)
 
 builder.add_node("classify", classify_node)
 builder.add_node("execute_tool", execute_tool_node)
+builder.add_node("guardrail", guardrail_node)
 builder.add_node("generate_response", generate_response_node)
 
 builder.add_edge(START, "classify")
@@ -164,7 +216,8 @@ builder.add_conditional_edges(
         "generate_response": "generate_response"
     }
 )
-builder.add_edge("execute_tool", "generate_response")
+builder.add_edge("execute_tool", "guardrail")
+builder.add_edge("guardrail", "generate_response")
 builder.add_edge("generate_response", END)
 
 # Compile into a runnable

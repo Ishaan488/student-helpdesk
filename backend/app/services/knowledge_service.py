@@ -22,7 +22,7 @@ class KnowledgeService:
         )
 
     async def process_and_store_document(
-        self, db: AsyncSession, file: UploadFile, uploader_id: UUID, description: str = ""
+        self, db: AsyncSession, file: UploadFile, uploader_id: UUID, description: str = "", access_level: str = "ALL"
     ) -> KnowledgeDocument:
         """
         Saves the file temporarily, extracts text, creates chunks, 
@@ -59,6 +59,7 @@ class KnowledgeService:
             for chunk in chunks:
                 chunk.metadata["document_id"] = str(doc_record.id)
                 chunk.metadata["filename"] = file.filename
+                chunk.metadata["access_level"] = access_level
 
             # 6. Generate Embeddings and Store in FAISS
             if os.path.exists(FAISS_INDEX_PATH):
@@ -83,9 +84,9 @@ class KnowledgeService:
             if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
 
-    def search_knowledge_base(self, query: str, k: int = 3) -> str:
+    def search_knowledge_base(self, query: str, user_role: str = "ALL", k: int = 3) -> str:
         """
-        Searches the FAISS index for the most relevant chunks.
+        Searches the FAISS index for the most relevant chunks, filtering by user_role.
         """
         if not os.path.exists(FAISS_INDEX_PATH):
             return "No knowledge base documents have been uploaded yet."
@@ -96,7 +97,15 @@ class KnowledgeService:
             allow_dangerous_deserialization=True
         )
         
-        results = vectorstore.similarity_search_with_score(query, k=k)
+        def role_filter(metadata: dict) -> bool:
+            doc_level = metadata.get("access_level", "ALL")
+            if user_role == "STUDENT":
+                return doc_level in ["ALL", "STUDENT"]
+            elif user_role == "TPO":
+                return doc_level in ["ALL", "STUDENT", "TPO"]
+            return True # Admin can see all
+
+        results = vectorstore.similarity_search_with_score(query, k=k, filter=role_filter)
         
         if not results:
             return "No relevant information found in the knowledge base."

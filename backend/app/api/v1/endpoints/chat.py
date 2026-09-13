@@ -106,6 +106,7 @@ async def chat_with_agent(
     initial_state = {
         "messages": langchain_messages,
         "current_user_id": current_user.id,
+        "current_user_role": current_user.role.value,
         "intent": None,
         "extracted_company": None,
         "eligibility_results": None,

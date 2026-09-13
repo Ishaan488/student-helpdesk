@@ -9,9 +9,10 @@ from app.services.knowledge_service import knowledge_service
 router = APIRouter()
 
 @router.post("/upload")
-async def upload_document(
+async def upload_knowledge_document(
     file: UploadFile = File(...),
     description: str = Form(""),
+    access_level: str = Form("ALL"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Any:
@@ -30,7 +31,8 @@ async def upload_document(
             db=db,
             file=file,
             uploader_id=current_user.id,
-            description=description
+            description=description,
+            access_level=access_level
         )
         return {
             "message": "Document processed and added to knowledge base successfully",
