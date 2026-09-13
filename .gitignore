@@ -36,3 +36,9 @@ htmlcov/
 
 # Alembic
 alembic/versions/*.pyc
+
+# AI & Data
+backend/app/faiss_index/
+backend/data/
+*.pdf
+temp_*.pdf
