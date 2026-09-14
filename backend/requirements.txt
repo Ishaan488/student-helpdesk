@@ -5,6 +5,8 @@ asyncpg==0.29.0
 pydantic-settings==2.5.2
 alembic==1.13.3
 python-dotenv==1.0.1
+# AST SQL Parser
+sqlglot==23.11.1
 pyjwt==2.9.0
 bcrypt==4.0.1
 python-multipart==0.0.12

@@ -9,7 +9,13 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agent.router import classify_intent
 from app.agent.state import AgentState
-from app.agent.tools import fetch_company_facts, fetch_student_eligibility, fetch_upcoming_drives, search_knowledge_base
+from app.agent.tools import (
+    fetch_company_facts, 
+    fetch_student_eligibility, 
+    fetch_upcoming_drives, 
+    search_knowledge_base,
+    query_historical_database
+)
 from app.config import settings
 
 # Strong reasoning model for generating the final response (using gemini-3.6-flash)
@@ -73,6 +79,11 @@ async def execute_tool_node(state: AgentState, config: RunnableConfig) -> Dict[s
         docs = await search_knowledge_base(query, user_role)
         results = [{"knowledge_base_extracts": docs}]
         raw_query = f"FAISS Vector Search\nQuery: {query}\nRole Filter: {user_role}\nMetric: L2 Cosine Distance"
+    elif intent == "HISTORICAL_ANALYTICS":
+        query = messages[-1].content
+        tool_res = await query_historical_database(query, db)
+        results = tool_res.get("data", [])
+        raw_query = tool_res.get("query")
         
     duration = int((time.time() - start_time) * 1000)
     
@@ -194,7 +205,7 @@ IMPORTANT RULES:
 def should_execute_tool(state: AgentState) -> str:
     """Conditional edge logic."""
     intent = state.get("intent")
-    if intent in ["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY"]:
+    if intent in ["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "HISTORICAL_ANALYTICS"]:
         return "execute_tool"
     return "generate_response"
 

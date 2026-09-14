@@ -468,4 +468,22 @@ Implemented a highly secure, Two-Layer RAG guardrail architecture to prevent stu
 
 ---
 
+## Entry #17 — The Text-to-SQL Analytics Agent (Database Pushdown & AST Security)
+**Date**: September 14, 2026
+
+### What I Did
+1. **New Routing Intent**: Updated `router.py` with `HISTORICAL_ANALYTICS` to detect queries about past trends and statistics.
+2. **Text-to-SQL Tool**: Built `query_historical_database` in `tools.py` using `gemini-3.6-flash` to act as an internal SQL Developer.
+3. **AST Security Validation**: Integrated `sqlglot` to parse the LLM's generated SQL into an Abstract Syntax Tree (AST). The backend strictly walks the AST to ensure the query is a `SELECT` statement, contains no destructive operations (`DROP`, `DELETE`), and only hits the allowed `historical_*` tables.
+4. **Database Pushdown Optimization**: Added strict prompt engineering to solve the "Lazy Query" anti-pattern. The LLM is forced to use SQL aggregations (`SUM`, `COUNT`) and strict `WHERE` clauses to push compute down to PostgreSQL. This prevents the server from OOM crashing on massive JSON payloads and saves significant token costs.
+
+### Architectural Decisions & Takeaways
+- **AST Parsing over Regex**: Using string `.contains("DROP")` is a massive security flaw in production LLM applications. An AST parser mathematically guarantees the structure of the SQL query before execution.
+- **Agentic Pipeline Efficiency**: The SQL tool intercepts the query, executes it on the database, and returns a tiny 1-row JSON payload (e.g. `{"total_placed": 21}`). The final conversational LLM then uses this tiny JSON to generate a friendly response. This proves the immense power of decoupling "Retrieval/Execution" from "Generation".
+
+### What's Next
+**Step 18:** Implement Admin Document Management UI and Markdown rendering in the Chat UI.
+
+---
+
 *← This document will grow with every build step. Next entry will be added when we start coding.*

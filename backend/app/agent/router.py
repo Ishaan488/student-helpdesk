@@ -18,7 +18,7 @@ llm_router = ChatGoogleGenerativeAI(
 
 class IntentClassification(BaseModel):
     """Structured output for intent routing."""
-    intent: Literal["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "GENERAL_CHAT"] = Field(
+    intent: Literal["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "HISTORICAL_ANALYTICS", "GENERAL_CHAT"] = Field(
         description="The primary intent of the user's message."
     )
     extracted_company: str = Field(
@@ -34,7 +34,8 @@ Classify the user's latest query into one of these intents:
 2. UPCOMING_DRIVES: The user is asking what companies are coming to campus generally.
 3. COMPANY_FACT: The user wants to know details about a specific company (e.g. what does Google do, what is TCS package).
 4. DOCUMENT_QUERY: The user is asking about policies, rules, interview processes, or specific details that might be in a document.
-5. GENERAL_CHAT: Anything else (greetings, unrelated questions).
+5. HISTORICAL_ANALYTICS: The user is asking for aggregate data, past trends, statistics, average packages, or historical hiring numbers (e.g., "What was the average CTC for CS in 2023?", "Which company hired the most students?").
+6. GENERAL_CHAT: Anything else (greetings, unrelated questions).
 
 CRITICAL EXTRACTION RULE:
 If the user mentions a specific company, extract its name. 
