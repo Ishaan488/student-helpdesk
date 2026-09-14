@@ -16,6 +16,84 @@ This platform implements a multi-node Agentic AI architecture designed to strict
 
 ---
 
+## Agentic Architecture (LangGraph)
+
+The platform is powered by a directed acyclic graph (DAG) built with **LangGraph**. This state machine ensures the LLM follows a strict sequence of operations, preventing hallucination and enforcing security protocols.
+
+### 1. Agents (Nodes)
+* **`classify_node` (The Router)**: Uses `gemini-3.1-flash-lite` to instantly read the conversation history and classify the user's intent into one of 5 strict categories.
+* **`execute_tool_node` (The Worker)**: A deterministic Python node that fires the correct backend tool based on the router's intent. 
+* **`guardrail_node` (The Security Evaluator)**: A post-retrieval security node. It uses a fast LLM to scan data retrieved from FAISS. If it detects highly confidential data (e.g. TPO-only memos) being sent to a student, it trips the circuit breaker (`is_safe = False`) and strips the data from the state before generation.
+* **`generate_response_node` (The Synthesizer)**: The final node using `gemini-3.6-flash`. It takes the raw JSON/Text outputted by the tools and generates a conversational, human-friendly response.
+
+### 2. Tools
+The `execute_tool_node` has access to 5 deterministic tools:
+1. **`fetch_student_eligibility`**: Queries PostgreSQL to calculate if the active student meets the CGPA/Backlog requirements for upcoming drives.
+2. **`fetch_upcoming_drives`**: Queries PostgreSQL for all active drives.
+3. **`fetch_company_facts`**: Queries PostgreSQL for static company information.
+4. **`search_knowledge_base`**: Performs semantic search on the local FAISS index for unstructured PDF data.
+5. **`query_historical_database`**: The **Text-to-SQL Agent**. Uses `gemini-3.6-flash` and `sqlglot` AST parsing to translate natural language into secure, read-only PostgreSQL aggregations over 10 years of placement history.
+
+### 3. Graph Flow (Connections)
+
+```mermaid
+graph TD
+    %% Styling
+    classDef user fill:#8d99ae,stroke:#2b2d42,stroke-width:2px,color:#fff
+    classDef agent fill:#2b2d42,stroke:#edf2f4,stroke-width:2px,color:#fff
+    classDef tool fill:#fdf0d5,stroke:#c1121f,stroke-width:2px,color:#333
+    classDef db fill:#003049,stroke:#669bbc,stroke-width:2px,color:#fff
+    classDef sec fill:#780000,stroke:#c1121f,stroke-width:2px,color:#fff
+    
+    User((User Input)):::user --> Router
+    
+    %% Core Nodes
+    subgraph StateMachine [LangGraph State Machine]
+        Router[1. classify_node <br/> Model: Flash-Lite]:::agent
+        Worker[2. execute_tool_node <br/> Python Runtime]:::agent
+        Evaluator[3. guardrail_node <br/> Model: Flash-Lite]:::sec
+        Generator[4. generate_response_node <br/> Model: Flash]:::agent
+    end
+    
+    %% Routing logic
+    Router -- "GENERAL_CHAT" --> Generator
+    Router -- "Specific Intent" --> Worker
+    
+    %% Tools Layer
+    subgraph ToolsLayer [Tool Execution Layer]
+        direction TB
+        T_Elig(Student Eligibility Check):::tool
+        T_Drive(Upcoming Drives Fetch):::tool
+        T_Fact(Company Facts Fetch):::tool
+        T_SQL(Text-to-SQL Analytics Agent):::tool
+        T_RAG(FAISS Semantic Search):::tool
+    end
+    
+    Worker -. "Triggers matching tool" .-> ToolsLayer
+    
+    %% Data Sources
+    subgraph StorageLayer [Storage Layer]
+        Postgres[(PostgreSQL <br/> Deterministic Data)]:::db
+        FAISS[(FAISS <br/> Unstructured PDFs)]:::db
+    end
+    
+    T_Elig --> Postgres
+    T_Drive --> Postgres
+    T_Fact --> Postgres
+    T_SQL --> Postgres
+    T_RAG --> FAISS
+    
+    ToolsLayer -. "Returns Raw JSON/Text" .-> Evaluator
+    
+    %% Post-Retrieval Security
+    Evaluator -- "is_safe = True" --> Generator
+    Evaluator -- "is_safe = False <br/> (Purges Data)" --> Generator
+    
+    Generator --> Output((Final Answer)):::user
+```
+
+---
+
 ## Technology Stack
 
 ### Backend (Core & AI Layer)
