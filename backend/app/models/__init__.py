@@ -14,9 +14,11 @@ from app.models.eligibility import EligibilityRule
 from app.models.historical import HistoricalDrive, HistoricalStudentOutcome, YearlyBatchSummary
 from app.models.student import Student
 from app.models.user import User
+from app.models.escalation import EscalatedQuery
 
 __all__ = [
     "User", "Student", "Company", "PlacementDrive", "EligibilityRule",
     "KnowledgeDocument", "Thread", "ChatMessage",
     "HistoricalDrive", "HistoricalStudentOutcome", "YearlyBatchSummary",
+    "EscalatedQuery"
 ]

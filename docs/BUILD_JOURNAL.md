@@ -502,6 +502,42 @@ Implemented a highly secure, Two-Layer RAG guardrail architecture to prevent stu
 ### What's Next
 **Step 19:** Admin Document Management UI (upload/delete PDFs from the browser).
 
+## Entry #19 — Asynchronous Human-in-the-Loop (HITL)
+**Date**: September 14, 2026
+
+### What I Did
+1. **New Routing Intent**: Added `ESCALATE_TO_ADMIN` to the router. If a user explicitly asks to speak to a human or if the AI fails continuously, this intent is triggered.
+2. **Asynchronous Escalation Architecture**: Added an `escalate_node` to LangGraph. Instead of forcing the user into a live WebSocket chat queue with an Admin (complex and hard to scale), we convert the query into an asynchronous "Ticket".
+   - The query is saved to a new `EscalatedQuery` database table.
+   - The AI responds gracefully: *"I have escalated your query to the Placement Office..."*
+3. **Admin Dashboard Integration**: Updated the `/admin` Next.js frontend to poll for these tickets. Added tabs for **Open Tickets** and **Resolved History**.
+4. **Agentic Injection**: When an Admin clicks "Resolve & Reply" from the dashboard, their text is saved in the `admin_reply` column, and a new `ChatMessage` record is *injected* directly into the student's thread, posing as an AI message but visually prefixed as `**[Message from Placement Office Admin]**`.
+
+### Architectural Decisions & Takeaways
+- **Why Asynchronous over Real-Time?** Building a live chat system requires WebSockets, presence detection, typing indicators, and assumes admins are online 24/7. An Asynchronous Ticket pattern lets admins respond when they have time, while keeping the UI natively embedded within the chat interface the student is already using.
+- **Relational Joins in FastAPI**: To display *who* asked the question on the admin dashboard, we used SQLAlchemy's `joinedload(EscalatedQuery.user)` to fetch the relational user data in a single optimized DB call, returning the `user_email` to the frontend.
+
+### What's Next
+**Step 20:** Dockerization and deployment planning.
+
+---
+
+## Entry #20 — Dockerization & Comprehensive Testing
+**Date**: September 14, 2026
+
+### What I Did
+1. **Dockerization Infrastructure**: Containerized the entire stack for production deployment. Created a multi-stage `Dockerfile` for the Next.js frontend, a Python `Dockerfile` for the FastAPI backend, and a `docker-compose.yml` that seamlessly orchestrates the Frontend, Backend, and PostgreSQL database networks.
+2. **Deterministic Rules Engine Testing**: Built rigorous Pytest unit tests (`test_rules_engine.py`) to validate the core `RulesEngine`. Mocked out SQLite tests to ensure PostgreSQL `ARRAY` compatibility locally by injecting a custom SQLAlchemy `TypeDecorator` (`StringArray`) which falls back to JSON strings under SQLite testing conditions.
+3. **Integration & Authentication Tests**: Validated the entire JWT lifecycle (`test_auth_api.py`), including Admin-only protected student registration, duplicate email rejection (400), and invalid login bounds (401).
+4. **Live LLM Agent Integration Tests**: Wrote live tests (`test_agent.py`) against the actual Gemini models (bypassing mocks) to ensure that the LangGraph `classify_node` consistently hits the correct intent states (`ELIGIBILITY_CHECK`, `UPCOMING_DRIVES`, `ESCALATE_TO_ADMIN`, `OUT_OF_SCOPE`).
+
+### Architectural Decisions & Takeaways
+- **No Mocks for LLMs**: We actively chose *not* to mock the LLM calls in `test_agent.py`. While traditional backend engineering demands 100% mocked dependencies for speed, Agentic engineering is fundamentally non-deterministic. Mocking an LLM router defeats the purpose of testing because the prompts themselves *are* the logic. Live tests against the actual model are the only source of truth.
+- **SQLite vs PostgreSQL Testing Paradigms**: Rather than relying on a heavy test PostgreSQL container running alongside the tests, we engineered our SQLAlchemy models to gracefully degrade unsupported PostgreSQL types (like `ARRAY`) into SQLite-friendly types (`JSON`) when running in test memory. This keeps test execution under 15 seconds without losing functionality.
+
+### What's Next
+**Step 21:** LLM Trace Observability (LangSmith / Arize Phoenix) and Caching.
+
 ---
 
 *← This document will grow with every build step. Next entry will be added when we start coding.*

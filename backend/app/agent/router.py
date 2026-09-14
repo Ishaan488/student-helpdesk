@@ -18,7 +18,7 @@ llm_router = ChatGoogleGenerativeAI(
 
 class IntentClassification(BaseModel):
     """Structured output for intent routing."""
-    intent: Literal["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "HISTORICAL_ANALYTICS", "GENERAL_CHAT", "OUT_OF_SCOPE"] = Field(
+    intent: Literal["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "HISTORICAL_ANALYTICS", "GENERAL_CHAT", "OUT_OF_SCOPE", "ESCALATE_TO_ADMIN"] = Field(
         description="The primary intent of the user's message."
     )
     extracted_company: str = Field(
@@ -36,7 +36,8 @@ Classify the user's latest query into one of these intents:
 4. DOCUMENT_QUERY: The user is asking about policies, rules, interview processes, or specific details that might be in a document.
 5. HISTORICAL_ANALYTICS: The user is asking for aggregate data, past trends, statistics, average packages, or historical hiring numbers (e.g., "What was the average CTC for CS in 2023?", "Which company hired the most students?").
 6. OUT_OF_SCOPE: The user is asking for code generation, solving math problems, personal questions, or general chit-chat unrelated to placements.
-7. GENERAL_CHAT: The user is saying a polite greeting (e.g., "Hello", "Thank you") or asking who you are.
+7. ESCALATE_TO_ADMIN: The user explicitly asks to speak to a human, admin, or the TPO office (e.g. "let me talk to admin", "connect me to human").
+8. GENERAL_CHAT: The user is saying a polite greeting (e.g., "Hello", "Thank you") or asking who you are.
 
 CRITICAL EXTRACTION RULE:
 If the user mentions a specific company, extract its name. 

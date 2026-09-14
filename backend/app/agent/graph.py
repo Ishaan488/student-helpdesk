@@ -148,7 +148,7 @@ Answer with a single word: YES or NO."""
 async def generate_response_node(state: AgentState) -> Dict[str, Any]:
     """Generates the final response based on intent and ground-truth data."""
     intent = state.get("intent")
-    results = state.get("eligibility_results", [])
+    results = state.get("eligibility_results")
     messages = state["messages"]
     
     is_safe = state.get("is_safe", True)
@@ -162,7 +162,7 @@ Your goal is to answer the user's question clearly and politely.
 CURRENT INTENT: {intent}
 
 GROUND TRUTH DATA:
-{json.dumps(results, indent=2) if results else "No structured data available or required for this query."}
+{json.dumps(results, indent=2) if results is not None else "No structured data available or required for this query."}
 """
 
         summary = state.get("summary")
@@ -223,11 +223,52 @@ async def reject_node(state: AgentState) -> Dict[str, Any]:
     return {"messages": [msg], "trace": trace, "debug_log": debug_log}
 
 
+async def escalate_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+    """Escalates the query to a human administrator."""
+    start_time = time.time()
+    from langchain_core.messages import AIMessage
+    from app.models.escalation import EscalatedQuery
+    
+    db = config["configurable"]["db"]
+    user_id = state.get("current_user_id")
+    thread_id = state.get("thread_id")
+    messages = state["messages"]
+    
+    # Get the last human message
+    query_text = messages[-1].content if messages else "Unknown query"
+    
+    if user_id and thread_id:
+        escalation = EscalatedQuery(
+            thread_id=thread_id,
+            user_id=user_id,
+            query_text=query_text,
+            status="OPEN"
+        )
+        db.add(escalation)
+        await db.flush()
+        
+    msg = AIMessage(content="I am not entirely sure about this, so I have escalated your query to the Placement Office. They will review it and reply directly in this chat shortly.")
+    
+    duration = int((time.time() - start_time) * 1000)
+    trace = state.get("trace", [])
+    trace.append("escalate_node")
+    
+    debug_log = state.get("debug_log", {})
+    debug_log["escalate_node"] = {
+        "latency_ms": duration,
+        "action": "Created EscalatedQuery ticket"
+    }
+    
+    return {"messages": [msg], "trace": trace, "debug_log": debug_log}
+
+
 def should_execute_tool(state: AgentState) -> str:
     """Conditional edge logic."""
     intent = state.get("intent")
     if intent == "OUT_OF_SCOPE":
         return "reject"
+    elif intent == "ESCALATE_TO_ADMIN":
+        return "escalate"
     elif intent in ["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "HISTORICAL_ANALYTICS"]:
         return "execute_tool"
     return "generate_response"
@@ -241,6 +282,7 @@ builder.add_node("execute_tool", execute_tool_node)
 builder.add_node("guardrail", guardrail_node)
 builder.add_node("generate_response", generate_response_node)
 builder.add_node("reject", reject_node)
+builder.add_node("escalate", escalate_node)
 
 builder.add_edge(START, "classify")
 builder.add_conditional_edges(
@@ -249,13 +291,15 @@ builder.add_conditional_edges(
     {
         "execute_tool": "execute_tool",
         "generate_response": "generate_response",
-        "reject": "reject"
+        "reject": "reject",
+        "escalate": "escalate"
     }
 )
 builder.add_edge("execute_tool", "guardrail")
 builder.add_edge("guardrail", "generate_response")
 builder.add_edge("generate_response", END)
 builder.add_edge("reject", END)
+builder.add_edge("escalate", END)
 
 # Compile into a runnable
 agent_app = builder.compile()

@@ -10,14 +10,27 @@ from app.models.drive import PlacementDrive
 from app.services.placement_service import PlacementService
 
 
-async def fetch_student_eligibility(db: AsyncSession, student_id: UUID) -> Dict[str, Any]:
+async def fetch_student_eligibility(db: AsyncSession, user_id: UUID) -> Dict[str, Any]:
     """
     Deterministically fetches all drives a student is eligible for.
     Used by the Agent graph to inject ground-truth before the LLM generates a response.
     """
-    drives = await PlacementService.get_eligible_drives_for_student(db, student_id)
+    from sqlalchemy import select
+    from app.models.student import Student
+    
+    query = select(Student).where(Student.user_id == user_id)
+    result = await db.execute(query)
+    student = result.scalar_one_or_none()
+    
+    if not student:
+        return {"data": [{"error": "Student profile not found. Are you an admin or TPO? If you are a student, please ensure your profile is created and updated on the platform so we can evaluate your eligibility against Google's drive criteria."}], "query": "None"}
+
+    drives = await PlacementService.get_eligible_drives_for_student(db, student.id)
     if drives is None:
         return {"data": [{"error": "Student profile not found. Are you an admin or TPO?"}], "query": "None"}
+        
+    if not drives:
+        return {"data": [{"info": "Student profile successfully verified, but there are currently no upcoming drives that this student is eligible for."}], "query": "None"}
 
     results = []
     for d in drives:

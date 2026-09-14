@@ -22,6 +22,8 @@ The platform is powered by a directed acyclic graph (DAG) built with **LangGraph
 
 ### 1. Agents (Nodes)
 * **`classify_node` (The Router)**: Uses `gemini-3.1-flash-lite` to instantly read the conversation history and classify the user's intent into one of 5 strict categories.
+* **`reject_node` (The Bouncer)**: Short-circuits the graph instantly for out-of-scope queries (like coding or math questions), returning a hardcoded rejection without hitting the expensive LLM.
+* **`escalate_node` (Human-in-the-Loop)**: Converts ambiguous or highly sensitive queries into asynchronous tickets that Human Admins can resolve via a dedicated Dashboard. Admin replies are seamlessly injected back into the student's chat interface.
 * **`execute_tool_node` (The Worker)**: A deterministic Python node that fires the correct backend tool based on the router's intent. 
 * **`guardrail_node` (The Security Evaluator)**: A post-retrieval security node. It uses a fast LLM to scan data retrieved from FAISS. If it detects highly confidential data (e.g. TPO-only memos) being sent to a student, it trips the circuit breaker (`is_safe = False`) and strips the data from the state before generation.
 * **`generate_response_node` (The Synthesizer)**: The final node using `gemini-3.6-flash`. It takes the raw JSON/Text outputted by the tools and generates a conversational, human-friendly response.
@@ -58,6 +60,8 @@ graph TD
     %% Routing logic
     Router -- "GENERAL_CHAT" --> Generator
     Router -- "Specific Intent" --> Worker
+    Router -- "OUT_OF_SCOPE" --> Reject[5. reject_node]:::agent
+    Router -- "ESCALATE_TO_ADMIN" --> Escalate[6. escalate_node]:::agent
     
     %% Tools Layer
     subgraph ToolsLayer [Tool Execution Layer]
@@ -100,6 +104,7 @@ graph TD
 * **Framework**: FastAPI (Async Python)
 * **Database**: PostgreSQL (Relational Data)
 * **ORM & Migrations**: Async SQLAlchemy & Alembic
+* **Testing**: Pytest, Pytest-Asyncio
 * **Authentication**: JWT (JSON Web Tokens) & bcrypt
 * **Agentic Framework**: LangChain, LangGraph, Google GenAI
 * **Vector Store**: FAISS (Facebook AI Similarity Search)
@@ -146,6 +151,19 @@ graph TD
    npm run dev
    ```
 3. Open http://localhost:3000 in your browser.
+
+### 3. Testing
+We enforce a strict testing policy. The deterministic Rules Engine and Auth API are tested via a mocked SQLite database using custom SQLAlchemy TypeDecorators. The LangGraph Agent is tested *live* against the Gemini APIs to validate non-deterministic intent classification.
+```bash
+cd backend
+pytest tests/ -v
+```
+
+### 4. Docker Deployment
+To run the entire stack (PostgreSQL, FastAPI Backend, Next.js Frontend) in containerized mode:
+```bash
+docker-compose up -d --build
+```
 
 ---
 

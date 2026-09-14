@@ -7,6 +7,7 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], operator.add]
     current_user_id: UUID | None
     current_user_role: str | None
+    thread_id: str | None
     intent: str | None
     extracted_company: str | None
     eligibility_results: List[Dict[str, Any]] | None

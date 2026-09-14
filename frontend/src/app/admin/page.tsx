@@ -79,6 +79,10 @@ export default function AdminDashboard() {
 
   const [documents, setDocuments] = useState<any[]>([]);
   const [studentsList, setStudentsList] = useState<any[]>([]);
+  const [escalations, setEscalations] = useState<any[]>([]);
+  const [escalationTab, setEscalationTab] = useState<"OPEN" | "RESOLVED">("OPEN");
+  const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const fetchDocuments = async () => {
     try {
@@ -95,6 +99,37 @@ export default function AdminDashboard() {
       setStudentsList(data);
     } catch (err) {
       console.error("Failed to fetch students", err);
+    }
+  };
+
+  const fetchEscalations = async () => {
+    try {
+      const data = await fetchWithAuth("/escalations/");
+      setEscalations(data);
+    } catch (err) {
+      console.error("Failed to fetch escalations", err);
+    }
+  };
+
+  const handleResolveEscalation = async (id: string) => {
+    if (!replyText[id] || replyText[id].trim() === "") {
+      alert("Reply text cannot be empty.");
+      return;
+    }
+    
+    setResolvingId(id);
+    try {
+      await fetchWithAuth(`/escalations/${id}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ reply_text: replyText[id] })
+      });
+      alert("Ticket resolved and reply sent to student!");
+      setReplyText(prev => ({ ...prev, [id]: "" }));
+      fetchEscalations();
+    } catch (err: any) {
+      alert("Failed to resolve ticket: " + err.message);
+    } finally {
+      setResolvingId(null);
     }
   };
 
@@ -116,6 +151,7 @@ export default function AdminDashboard() {
     if (user && (user.role === "ADMIN" || user.role === "TPO")) {
       fetchDocuments();
       fetchStudents();
+      fetchEscalations();
     }
   }, [user]);
 
@@ -308,6 +344,125 @@ export default function AdminDashboard() {
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Escalated Queries Section */}
+        <div className="mt-12 bg-white shadow overflow-hidden sm:rounded-lg border border-slate-200">
+          <div className="px-4 py-5 sm:px-6 flex justify-between items-center border-b border-slate-200 bg-red-50">
+            <div>
+              <h3 className="text-lg leading-6 font-medium text-red-900">Escalated Queries (Human-in-the-Loop)</h3>
+              <p className="mt-1 max-w-2xl text-sm text-red-700">Queries the AI could not answer or where the student explicitly requested human assistance.</p>
+            </div>
+            <div className="text-sm font-medium text-red-700 bg-red-100 px-3 py-1 rounded-full">
+              {escalations.filter(t => t.status === "OPEN").length} Open Tickets
+            </div>
+          </div>
+          
+          <div className="bg-white border-b border-slate-200">
+            <nav className="-mb-px flex" aria-label="Tabs">
+              <button
+                onClick={() => setEscalationTab("OPEN")}
+                className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                  escalationTab === "OPEN"
+                    ? "border-red-500 text-red-600"
+                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                Open Tickets
+              </button>
+              <button
+                onClick={() => setEscalationTab("RESOLVED")}
+                className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                  escalationTab === "RESOLVED"
+                    ? "border-green-500 text-green-600"
+                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                Resolved History
+              </button>
+            </nav>
+          </div>
+
+          <div className="border-t border-slate-200">
+            {escalationTab === "OPEN" && (
+              escalations.filter(t => t.status === "OPEN").length === 0 ? (
+                <div className="text-center py-10 text-sm text-slate-500">
+                  No open escalations. The AI is handling everything!
+                </div>
+              ) : (
+                <ul role="list" className="divide-y divide-slate-200">
+                  {escalations.filter(t => t.status === "OPEN").map((ticket) => (
+                    <li key={ticket.id} className="p-4 sm:px-6 hover:bg-slate-50 transition-colors">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">Student: {ticket.user_email}</p>
+                            <p className="text-sm text-slate-700 mt-1 bg-slate-100 p-3 rounded border border-slate-200">
+                              "{ticket.query_text}"
+                            </p>
+                          </div>
+                          <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded shrink-0">
+                            {new Date(ticket.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        
+                        <div className="flex gap-3">
+                          <textarea
+                            className="flex-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-slate-300 rounded-md text-slate-900 px-3 py-2 border"
+                            placeholder="Type your response to the student..."
+                            rows={2}
+                            value={replyText[ticket.id] || ""}
+                            onChange={(e) => setReplyText(prev => ({ ...prev, [ticket.id]: e.target.value }))}
+                          />
+                          <button
+                            onClick={() => handleResolveEscalation(ticket.id)}
+                            disabled={resolvingId === ticket.id}
+                            className="self-end inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                          >
+                            {resolvingId === ticket.id ? "Resolving..." : "Resolve & Reply"}
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
+
+            {escalationTab === "RESOLVED" && (
+              escalations.filter(t => t.status === "RESOLVED").length === 0 ? (
+                <div className="text-center py-10 text-sm text-slate-500">
+                  No resolved tickets yet.
+                </div>
+              ) : (
+                <ul role="list" className="divide-y divide-slate-200">
+                  {escalations.filter(t => t.status === "RESOLVED").map((ticket) => (
+                    <li key={ticket.id} className="p-4 sm:px-6 hover:bg-slate-50 transition-colors">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">Student: {ticket.user_email}</p>
+                            <p className="text-sm text-slate-700 mt-1 bg-slate-100 p-3 rounded border border-slate-200">
+                              <span className="font-semibold block mb-1">Query:</span>
+                              "{ticket.query_text}"
+                            </p>
+                          </div>
+                          <span className="font-mono text-[10px] text-green-700 bg-green-100 px-2 py-1 rounded shrink-0">
+                            Resolved: {ticket.resolved_at ? new Date(ticket.resolved_at).toLocaleString() : "Unknown"}
+                          </span>
+                        </div>
+                        
+                        <div className="bg-blue-50 p-3 rounded border border-blue-100 mt-2">
+                          <p className="text-sm text-blue-900 font-semibold mb-1">Your Reply:</p>
+                          <p className="text-sm text-blue-800 whitespace-pre-wrap">{ticket.admin_reply}</p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )
             )}
           </div>
         </div>

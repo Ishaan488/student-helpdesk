@@ -6,7 +6,7 @@ Mounts all v1 feature routers under their respective paths and OpenAPI tags.
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, companies, drives, students, chat, knowledge
+from app.api.v1.endpoints import auth, companies, drives, students, chat, knowledge, escalation
 
 v1_router = APIRouter()
 
@@ -16,3 +16,4 @@ v1_router.include_router(students.router, prefix="/students", tags=["Students"])
 v1_router.include_router(companies.router, prefix="/companies", tags=["Companies"])
 v1_router.include_router(chat.router, prefix="/chat", tags=["Chat Intelligence"])
 v1_router.include_router(knowledge.router, prefix="/knowledge", tags=["Knowledge Base"])
+v1_router.include_router(escalation.router, prefix="/escalations", tags=["Escalations"])
