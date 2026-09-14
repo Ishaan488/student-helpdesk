@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { fetchWithAuth, getAuthToken, removeAuthToken } from "@/lib/api";
 import { Send, Bot, User, LogOut, Loader2, Sparkles, Activity, GitMerge, Database, BrainCircuit, ArrowDown, ChevronRight, X, Clock, Zap, MessageSquare, Plus } from "lucide-react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
   role: "user" | "assistant" | "human" | "ai";
@@ -354,9 +356,17 @@ export default function ChatPage() {
               <div className={`flex-1 rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
                 msg.role === "user" || msg.role === "human"
                   ? "bg-white border border-slate-200 text-slate-900 ml-12 shadow-sm" 
-                  : "bg-white border border-slate-200 text-slate-800 shadow-sm mr-12 whitespace-pre-wrap"
+                  : "bg-white border border-slate-200 text-slate-800 shadow-sm mr-12 overflow-hidden"
               }`}>
-                {msg.content}
+                {msg.role === "user" || msg.role === "human" ? (
+                  msg.content
+                ) : (
+                  <div className="prose prose-sm max-w-none prose-slate prose-p:leading-relaxed prose-pre:bg-slate-900 prose-pre:text-slate-50 prose-a:text-indigo-600 prose-headings:font-semibold">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
             </div>
           ))}

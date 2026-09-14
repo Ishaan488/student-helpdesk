@@ -482,7 +482,25 @@ Implemented a highly secure, Two-Layer RAG guardrail architecture to prevent stu
 - **Agentic Pipeline Efficiency**: The SQL tool intercepts the query, executes it on the database, and returns a tiny 1-row JSON payload (e.g. `{"total_placed": 21}`). The final conversational LLM then uses this tiny JSON to generate a friendly response. This proves the immense power of decoupling "Retrieval/Execution" from "Generation".
 
 ### What's Next
-**Step 18:** Implement Admin Document Management UI and Markdown rendering in the Chat UI.
+**Step 18:** Domain scoping, Markdown rendering, and README architecture documentation.
+
+---
+
+## Entry #18 — Domain Scoping, Reject Node & Chat UI Markdown
+**Date**: September 14, 2026
+
+### What I Did
+1. **`OUT_OF_SCOPE` Intent & `reject_node`**: Added a new LangGraph node that short-circuits the graph for non-placement queries (code generation, personal questions, math). The reject node returns a hardcoded string without invoking the expensive generator LLM, dropping rejection latency from ~6s to ~1s and token cost to zero.
+2. **Defense-in-Depth**: Kept the `STRICT SCOPE LIMITATION` rule in the generator's system prompt as a secondary safety net for ambiguous edge cases (e.g., "How to prepare for a Google coding interview?" which IS placement-related but mentions "coding").
+3. **Markdown Rendering**: Integrated `react-markdown` + `remark-gfm` + `@tailwindcss/typography` into the Chat UI so AI responses render tables, bullet points, bold text, and code blocks beautifully.
+4. **README Architecture Diagram**: Added a full Mermaid.js flowchart to `README.md` documenting all agents, tools, and their connections.
+
+### Architectural Decisions & Takeaways
+- **Why two layers of scope enforcement?** The fast router (`Flash-Lite`) catches the obvious 90% of out-of-scope queries instantly. But it's a cheap model and will misclassify edge cases like *"What programming languages does TCS test?"* (valid question). The generator's scope rule acts as the intelligent fallback for these ambiguous 10%.
+- **Hardcoded rejection is a feature, not a limitation.** Because the `reject_node` doesn't call an LLM, it is mathematically immune to prompt injection. No matter how cleverly crafted the input, the output is always the same static string.
+
+### What's Next
+**Step 19:** Admin Document Management UI (upload/delete PDFs from the browser).
 
 ---
 

@@ -173,6 +173,7 @@ GROUND TRUTH DATA:
 IMPORTANT RULES:
 - If ground truth data is provided, YOU MUST base your answer strictly on it.
 - Do NOT hallucinate eligibility, CTC, or package details.
+- STRICT SCOPE LIMITATION: You are a professional College Placement Assistant. If the user asks a question that is entirely unrelated to college placements, interviews, companies, policies, or student eligibility (for example: asking you to write code, solve math problems, tell a joke, answer personal questions, or engage in general non-placement chit-chat), you MUST refuse to answer and politely steer them back to placement-related topics.
 - Be concise but helpful.
 """
     
@@ -202,10 +203,32 @@ IMPORTANT RULES:
     return {"messages": [response], "trace": trace, "debug_log": debug_log}
 
 
+async def reject_node(state: AgentState) -> Dict[str, Any]:
+    """Instantly rejects out-of-scope queries without invoking a generative LLM."""
+    start_time = time.time()
+    from langchain_core.messages import AIMessage
+    
+    msg = AIMessage(content="I apologize, but I am a professional College Placement Assistant. I cannot answer personal questions, write code, solve math problems, or engage in topics outside of college placements and career guidance.")
+    
+    duration = int((time.time() - start_time) * 1000)
+    trace = state.get("trace", [])
+    trace.append("reject_node")
+    
+    debug_log = state.get("debug_log", {})
+    debug_log["reject_node"] = {
+        "latency_ms": duration,
+        "action": "Hard-rejecting out-of-scope query"
+    }
+    
+    return {"messages": [msg], "trace": trace, "debug_log": debug_log}
+
+
 def should_execute_tool(state: AgentState) -> str:
     """Conditional edge logic."""
     intent = state.get("intent")
-    if intent in ["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "HISTORICAL_ANALYTICS"]:
+    if intent == "OUT_OF_SCOPE":
+        return "reject"
+    elif intent in ["ELIGIBILITY_CHECK", "UPCOMING_DRIVES", "COMPANY_FACT", "DOCUMENT_QUERY", "HISTORICAL_ANALYTICS"]:
         return "execute_tool"
     return "generate_response"
 
@@ -217,6 +240,7 @@ builder.add_node("classify", classify_node)
 builder.add_node("execute_tool", execute_tool_node)
 builder.add_node("guardrail", guardrail_node)
 builder.add_node("generate_response", generate_response_node)
+builder.add_node("reject", reject_node)
 
 builder.add_edge(START, "classify")
 builder.add_conditional_edges(
@@ -224,12 +248,14 @@ builder.add_conditional_edges(
     should_execute_tool,
     {
         "execute_tool": "execute_tool",
-        "generate_response": "generate_response"
+        "generate_response": "generate_response",
+        "reject": "reject"
     }
 )
 builder.add_edge("execute_tool", "guardrail")
 builder.add_edge("guardrail", "generate_response")
 builder.add_edge("generate_response", END)
+builder.add_edge("reject", END)
 
 # Compile into a runnable
 agent_app = builder.compile()
