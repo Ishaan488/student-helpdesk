@@ -88,12 +88,13 @@ async def fetch_company_facts(db: AsyncSession, company_name: str) -> Dict[str, 
         "query": str(query.compile(compile_kwargs={"literal_binds": True}))
     }
 
-async def search_knowledge_base(query: str) -> str:
+async def search_knowledge_base(query: str, user_role: str = "ALL") -> str:
     """
     Searches the FAISS vector database for unstructured knowledge regarding policies, rules, or unstructured company data.
+    Filters results by user_role to enforce document-level RBAC.
     """
     from app.services.knowledge_service import knowledge_service
-    return knowledge_service.search_knowledge_base(query=query)
+    return knowledge_service.search_knowledge_base(query=query, user_role=user_role)
 
 
 async def query_historical_database(query: str, db: AsyncSession) -> Dict[str, Any]:
